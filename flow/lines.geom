@@ -12,6 +12,7 @@ in VS_OUT {
     vec4 prevPos;
 } gs_in[];
 out vec4 gFragColor;
+// out vec2 uv;
 
 void main() {
     // set current and prev positions
@@ -28,10 +29,12 @@ void main() {
 
     gl_Position = pos;
     gFragColor = fragCol;
+ // uv = vec2(x,y);
     EmitVertex();
 
     gl_Position = pp;
-    gFragColor = vec4(0,0,0,1);
+ // uv = pp.xy / 2 + .5;
+    gFragColor = fragCol; vec4(0,0,0,1);
     EmitVertex();
 
     EndPrimitive();

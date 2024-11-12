@@ -24,6 +24,10 @@ int shader[]  = {0,0,0,0}; // Shaders
 unsigned int noise;
 unsigned int timeUniformLocation[2];
 unsigned int deltaTimeUniform;
+unsigned int texUniformLoc;
+// FBOs
+unsigned int texs[2];
+unsigned int FBOs[2];
 // Time
 bool moveTime = true;
 double progTime = 0;
@@ -40,8 +44,8 @@ bool showingField = false;
  *  Display Function
  */
 void display() {
-   glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-   glEnable(GL_DEPTH_TEST);
+   glClear(GL_COLOR_BUFFER_BIT);
+
    glPointSize(3);
    glLoadIdentity();
    glLineWidth(2);
@@ -77,6 +81,25 @@ void display() {
       glVertex2f( 1, 1);
       glVertex2f( 1,-1);
       glEnd();
+   }
+
+   // Compute shader to determine dot positions
+   glUseProgram(shader[0]);
+   glUniform1f(timeUniformLocation[0], (float)progTime);
+   glUniform1f(deltaTimeUniform, deltaTime);
+   glDispatchCompute(32,1,1);
+   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+   if (mode == PARTICLE_MODE)
+   {
+      // Render program to display dots
+      glUseProgram(shader[3]);
+      // glBindTexture(GL_TEXTURE_2D, texs[0]);
+      glDrawArrays(GL_POINTS,0,NUM_DOTS);
+   }
+   else {
+      glUseProgram(shader[1]);
+      glDrawArrays(GL_POINTS,0,NUM_DOTS);
    }
 
    glUseProgram(0);
@@ -289,6 +312,34 @@ void idle() {
    // Set screen to be redisplayed
    glutPostRedisplay();
 }
+
+// void generatePingPongFBOs(int width, int height, unsigned int textures[2], unsigned int fbos[2]) {
+//    // Create textures
+//    glGenTextures(2, textures);
+//    // Initialize texture parameters
+//    for (int i = 0; i < 2; i++) {
+//       glBindTexture(GL_TEXTURE_2D, textures[i]);
+//       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+//       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+//       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+//       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+//    }
+
+//    // Generate frame buffers
+//    glGenFramebuffers(2, fbos);
+
+//    // Attach textures to FBOs
+//    for (int i = 0; i < 2; i++) {
+//       glBindFramebuffer(GL_FRAMEBUFFER, fbos[i]);
+//       // Bind 
+//       glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textures[i], 0);
+//       GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+//       if (status != GL_FRAMEBUFFER_COMPLETE) {
+//          Fatal("FBO incomplete\n");
+//       }
+//    }
+// }
 
 /*
  *  Main function - initialize shaders and glut
