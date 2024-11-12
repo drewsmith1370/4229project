@@ -4,3 +4,6 @@ CSCI 4229
 Made by Drew Smith. Visualize Perlin noise flow fields.
 
 ## Instructions
+
+Press 'm' to swap point rendering
+Press 'n' to display noise map
