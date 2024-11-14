@@ -1,7 +1,8 @@
 #include "CSCIx229.h"
 #define PARTICLE_MODE 0
 #define DOT_MODE 1
-#define NUM_DOTS 32768
+#define NUM_DOTS 131072
+// #define RES 16/9
 
 /*  
  *  Buffer layout (all floats):
@@ -49,7 +50,7 @@ void display() {
    glUseProgram(shader[0]);
    glUniform1f(timeUniformLocation[0], (float)progTime);
    glUniform1f(deltaTimeUniform, deltaTime);
-   glDispatchCompute(32,1,1);
+   glDispatchCompute(128,1,1);
    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
    if (mode == PARTICLE_MODE)
@@ -260,12 +261,20 @@ void keyup(unsigned char ch,int x,int y) {
  */
 void reshape(int width,int height)
 {
-   //  Ratio of the width to the height of the window
-   asp = (height>0) ? (double)width/height : 1;
    //  Set the viewport to the entire window
    glViewport(0,0, RES*width,RES*height);
-   //  Set projection
-   Project(0,asp,dim);
+   //  Tell OpenGL we want to manipulate the projection matrix
+   // glMatrixMode(GL_PROJECTION);
+   // //  Undo previous transformations
+   // glLoadIdentity();
+   //  Orthogonal projection box adjusted for the
+   //  aspect ratio of the window
+   asp = (height>0) ? (double)width/height : 1;
+   //  Switch to manipulating the model matrix
+   // glMatrixMode(GL_MODELVIEW);
+   Project(0, asp, dim);
+   //  Undo previous transformations
+   glLoadIdentity();
 }
 
 /*

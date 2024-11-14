@@ -1,9 +1,9 @@
 #version 430 core
 
 layout (std430, binding = 0) buffer dot_buffer {
-    vec4 pos  [32768];
-    vec2 vel  [32768];
-    vec4 prev [32768];
+    vec4 pos  [131072];
+    vec2 vel  [131072];
+    vec4 prev [131072];
 };
 
 layout(location = 0) in vec4 position; // Dot position
