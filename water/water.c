@@ -2,11 +2,14 @@
 
 // Window
 int dim = 1;
-int asp = 2;
-float w = 1;
+int asp = 1;
 int fov = 59;
 // Keys
 bool keys[256] = {0};
+bool la = false;
+bool ra = false;
+bool ua = false;
+bool da = false;
 // Time
 double  progTime = 0;
 double   aniTime = 0;
@@ -16,35 +19,42 @@ bool playingTime = 0;
 double cam[3] = {0,0,2};
 double th = 0;
 double ph = 90;
+// Axes
+bool axes = false;
 
 /*
  *  Handle continuous key events
  */
 void handleKeys() {
-    for (int i=0;i<256;i++) {
-        if (!keys[i]) continue;
-        switch(i) {
-            case 'w':
-                cam[2] += 1;
-                break;
-            case 'a':
-                cam[0] -= 1;
-                printf("a");
-                break;
-            case 's':
-                cam[2] -= 1;
-                break;
-            case 'd':
-                cam[0] += 1;
-                break;
-            default:
-                break;
-        }
-    }
+   for (int i=0;i<256;i++) {
+      if (!keys[i]) continue;
+      switch(i) {
+         case 'w':
+               cam[2] += 1;
+               break;
+         case 'a':
+               cam[0] -= 1;
+               break;
+         case 's':
+               cam[2] -= 1;
+               break;
+         case 'd':
+               cam[0] += 1;
+               break;
+         default:
+               break;
+      }
+   }
+   // cursor keys
+   if (la);
+   if (ra);
+   if (ua);
+   if (da);
 }
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+    fprintf(stdout,"Hi\n");
     handleKeys();
     Project(fov,asp,dim);
     gluLookAt(cam[0],cam[1],cam[2] , 0,0,0 , 0,1,0);
@@ -55,7 +65,26 @@ void display() {
     // double dz = cam[2] - Cos(th)*Cos(ph);
 
     // gluLookAt(cam[0],cam[1],cam[2] , dx,dy,dz , 0,Cos(ph),0);
+
+    // Axes
+    if (axes) {
+        glBegin(GL_LINES);
+        glColor3f (1,1,1);
+        glVertex3f(0,0,0); glVertex3f(.8,0,0);
+        glVertex3f(0,0,0); glVertex3f(0,.8,0);
+        glVertex3f(0,0,0); glVertex3f(0,0,.8);
+        glEnd();
+
+        // x y z labels
+        glRasterPos3f(.8,0,0); Print("X");
+        glRasterPos3f(0,.8,0); Print("Y");
+        glRasterPos3f(0,0,.8); Print("Z");
+
+        glWindowPos2d(5,5);
+        Print("x: %.1f y: %.1f z: %.1f",cam[0],cam[1],cam[2]);
+    }
     
+    // Draw triangle
     glBegin(GL_POLYGON);
     glVertex3f( 0, 1, 0);
     glVertex3f(-1,-1, 0);
@@ -65,6 +94,7 @@ void display() {
     ErrCheck("display");
     glFlush();
     glutSwapBuffers();
+    return;
 }
 
 /*
@@ -222,6 +252,7 @@ int CreateComputeProg(char* CompFile)
  */
 void keydown(unsigned char ch,int x,int y) {
    if (ch == 27) exit(0);
+   if (ch == 'q') axes = !axes;
    keys[ch] = true;
 //    if (ch == 'm')
 // 	   mode = !mode;
@@ -235,12 +266,49 @@ void keyup(unsigned char ch,int x,int y) {
 }
 
 /*
+ *  Special keys
+ */
+void specialdown(int ch, int x,int y) {
+   switch(ch) {
+      case GLUT_KEY_LEFT:
+         la = true;
+         break;
+      case GLUT_KEY_DOWN:
+         da = true;
+         break;
+      case GLUT_KEY_RIGHT:
+         ra = true;
+         break;
+      case GLUT_KEY_UP:
+         ua = true;
+         break;
+   }
+}
+void specialup(int ch, int x, int y) {
+   switch(ch) {
+      case GLUT_KEY_LEFT:
+         la = false;
+         break;
+      case GLUT_KEY_DOWN:
+         da = false;
+         break;
+      case GLUT_KEY_RIGHT:
+         ra = false;
+         break;
+      case GLUT_KEY_UP:
+         ua = false;
+         break;
+   }
+}
+
+/*
  *  GLUT calls this routine when the window is resized
  */
 void reshape(int width,int height)
 {
    //  Set the viewport to the entire window
    glViewport(0,0, RES*width,RES*height);
+
    //  Tell OpenGL we want to manipulate the projection matrix
    glMatrixMode(GL_PROJECTION);
    //  Undo previous transformations
@@ -250,7 +318,7 @@ void reshape(int width,int height)
    asp = (height>0) ? (double)width/height : 1;
    //  Switch to manipulating the model matrix
    glMatrixMode(GL_MODELVIEW);
-   Project(fov, asp, w);
+   Project(fov, asp, dim);
    //  Undo previous transformations
    glLoadIdentity();
 }
@@ -274,7 +342,7 @@ void idle() {
 int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
-    glutInitWindowSize(420,380);
+   //  glutInitWindowSize(420,380);
     glutCreateWindow("Ethan Coleman, Drew Smith");
 
     glutDisplayFunc(display);
@@ -282,6 +350,8 @@ int main(int argc, char** argv) {
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keydown);
     glutKeyboardUpFunc(keyup);
+    glutSpecialFunc(specialdown);
+    glutSpecialUpFunc(specialup);
 
     // Set keys array
     for (int i=0;i<256;i++)
