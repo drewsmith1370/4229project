@@ -100,7 +100,8 @@ void main() {
 
     // Give every particle a unique velocity so they dont get grouped over time
     float velModifier = idx * deltaTime / 131072;
-    vel[idx] = velModifier * vec2(cos(accel.x*3.14), sin(accel.x*3.14));
+    float a = accel.x;
+    vel[idx] = velModifier * vec2(cos(a*6.28), sin(a*6.28));
     pos[idx].xy += vel[idx];
     pos[idx].xy = fract(pos[idx].xy) + -1 * int(pos[idx].xy);
 }
