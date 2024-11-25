@@ -18,7 +18,7 @@ LIBS=-framework GLUT -framework OpenGL
 #  Linux/Unix/Solaris
 else
 CFLG=-O3 -Wall
-LIBS=-lglfw -lGLU -lGL -lm
+LIBS=-lglfw -lGLU -lGL -lm -lGLEW
 endif
 #  OSX/Linux/Unix/Solaris
 CLEAN=rm -f $(EXE) *.o *.a

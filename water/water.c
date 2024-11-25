@@ -2,7 +2,7 @@
 
 // Window
 int dim = 1;
-int asp = 1;
+double asp = 1;
 int fov = 59;
 // Keys
 bool keys[256] = {0};
