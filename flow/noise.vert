@@ -1,7 +1,5 @@
 #version 430
 
-
-
 in vec4 Vertex;
 out vec2 ModelPos;
 

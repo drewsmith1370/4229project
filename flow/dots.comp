@@ -3,9 +3,9 @@
 // Need to rewrite for GL_MAX_WORKGROUP_INVOCATIONS
 layout (local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 layout (std430, binding = 0) buffer dot_buffer {
-    vec4 pos     [32768];
-    vec2 vel     [32768];
-    vec4 prevPos [32768];
+    vec4 pos     [131072];
+    vec2 vel     [131072];
+    vec4 prevPos [131072];
 };
 
 uniform float time;
@@ -99,8 +99,9 @@ void main() {
     psrdnoise(vec3(pos[idx].xy,time/4),vec3(16),100,accel);
 
     // Give every particle a unique velocity so they dont get grouped over time
-    float velModifier = idx * deltaTime / 32768;
-    vel[idx] = velModifier * vec2(cos(accel.x*3.14), sin(accel.x*3.14));
+    float velModifier = idx * deltaTime / 131072;
+    float a = accel.x;
+    vel[idx] = velModifier * vec2(cos(a*6.28), sin(a*6.28));
     pos[idx].xy += vel[idx];
     pos[idx].xy = fract(pos[idx].xy) + -1 * int(pos[idx].xy);
 }
