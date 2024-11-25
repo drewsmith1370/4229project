@@ -4,20 +4,46 @@
 GLFWwindow* window = NULL;
 // Keys
 bool keys[256];
+bool la = false;
+bool ra = false;
+bool ua = false;
+bool da = false;
 // View
-int proj = 0;
+int proj = 1;
 double asp = 1;
 int dim = 1;
 int fov = 59;
 // Camera
-double camera[3] = { 0,0,-1 };
+double cam[3] = { 0,0,-1 };
+double th=90, ph=0;
+// Time
+double progTime = 0;
+double deltaTime = 0;
+bool paused = false;
+
+// Take cross product (a x b) and store result in argument 3
+void Cross(double a[3], double b[3], double result[3]) {
+    result[0] =  a[1]*b[2] - a[2]*b[1];
+    result[1] = -a[0]*b[2] + a[2]*b[0];
+    result[2] =  a[0]*b[1] - a[1]*b[0];
+}
+
+// Calculate the direction of the camera. Returns unit vector that must be added to camera to calculate view point
+void LookDirection(float ph, float th, double lookDir[3]) {
+    lookDir[0] =  Sin(th)*Cos(ph);
+    lookDir[1] = -Sin(ph);
+    lookDir[2] = -Cos(th)*Cos(ph);
+}
 
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glLoadIdentity();
 
-    gluLookAt(0,0,-1 , 0,0,0 , 0,1,0);
+    Project(fov,asp,dim);
+    double dir[3];
+    LookDirection(ph,th,dir);
+    gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
 
     glColor3f(1,1,1);
     glBegin(GL_POLYGON);
@@ -37,29 +63,86 @@ void ClearKeys() {
 }
 
 void handleKey(GLFWwindow* window,int key,int scancode,int action,int mods) {
-    if (action == GLFW_RELEASE) {
-        keys[key] = false;
+    bool setTo;
+    if (action == GLFW_PRESS) {
+        setTo = true;
     }
+    else if (action == GLFW_RELEASE) {
+        setTo = false;
+    }
+    else return;
+
+
+    if (key < 256) {
+        keys[key] = setTo;
+        return;
+    }
+
+    //  Right arrow key - increase angle by 5 degrees
+    else if (key == GLFW_KEY_RIGHT)
+        ra = setTo;
+    else if (key == GLFW_KEY_LEFT)
+        la = setTo;
+    else if (key == GLFW_KEY_UP)
+        ua = setTo;
+    else if (key == GLFW_KEY_DOWN)
+        da = setTo;
 
     //  Exit on ESC
-   if (key == GLFW_KEY_ESCAPE)
-      glfwSetWindowShouldClose(window,1);
-//    //  Right arrow key - increase angle by 5 degrees
-//    else if (key == GLFW_KEY_RIGHT)
-   
-//    //  Left arrow key - decrease angle by 5 degrees
-//    else if (key == GLFW_KEY_LEFT)
-   
-//    //  Up arrow key - increase elevation by 5 degrees
-//    else if (key == GLFW_KEY_UP)
-//       ph += 5;
-//    //  Down arrow key - decrease elevation by 5 degrees
-//    else if (key == GLFW_KEY_DOWN)
-//       ph -= 5;
+    if (key == GLFW_KEY_ESCAPE)
+        glfwSetWindowShouldClose(window,1);
+    
+}
 
-    if (action == GLFW_PRESS && key < 256) {
-        keys[key] = true;
+void handleUserInputs() {
+
+    // Special
+    if (la) 
+        th -= 1;
+    if (ra) 
+        th += 1;
+    if (ua) 
+        ph -= 1;
+    if (da) 
+        ph += 1;
+
+    double dir[3];
+    double side[3];
+    double up[3] = {0,1,0};
+    double speed = .05;
+    for (int i=0;i<256;i++) {
+        if (!keys[i]) continue;
+        switch(i) {
+            case 'W':
+                LookDirection(ph,th, dir);
+                cam[0] += speed * dir[0];
+                cam[1] += speed * dir[1];
+                cam[2] += speed * dir[2];
+                break;
+            case 'S':
+                LookDirection(ph,th, dir);
+                cam[0] -= speed * dir[0];
+                cam[1] -= speed * dir[1];
+                cam[2] -= speed * dir[2];
+                break;
+            case 'A':
+                LookDirection(ph,th,dir);
+                Cross(up,dir,side);
+                cam[0] += speed * side[0];
+                cam[1] += speed * side[1];
+                cam[2] += speed * side[2];
+                break;
+            case 'D':
+                LookDirection(ph,th,dir);
+                Cross(dir,up,side);
+                cam[0] += speed * side[0];
+                cam[1] += speed * side[1];
+                cam[2] += speed * side[2];
+                break;
+            default: break;
+        }
     }
+
 }
 
 //
@@ -83,6 +166,14 @@ static void reshape(GLFWwindow* window,int width,int height)
    Project(proj?fov:0,asp,dim);
 }
 
+void updateTime() {
+    if (paused) return;
+   // Update time and deltaTime
+   double now = glfwGetTime();
+   deltaTime = now - progTime;
+   progTime = now;
+}
+
 int main(int argc, char** argv) {
     if (!glfwInit()) {
         fprintf(stderr,"Cannot Initialize GLFW");
@@ -100,13 +191,7 @@ int main(int argc, char** argv) {
     // Set glfw context as current
     glfwMakeContextCurrent(window);
 
-    // Initialize GLEW
-    // GLenum glewError = glewInit();
-    // if (glewError != GLEW_OK) {
-    //     printf("Failed to initialize GLEW: %s\n", glewGetErrorString(glewError));
-    //     glfwTerminate();
-    //     return -1;
-    // }
+    glClearColor(.1,.4,1,1);
 
     //  Set callbacks for window reshape and keyboard
     ClearKeys();
@@ -117,6 +202,7 @@ int main(int argc, char** argv) {
     //  Main loop
     while (!glfwWindowShouldClose(window))
     {
+        handleUserInputs();
         display();
         glfwSwapBuffers(window);
         glfwPollEvents();
