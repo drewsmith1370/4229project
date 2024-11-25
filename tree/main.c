@@ -1,5 +1,4 @@
 #define GLFW 
-#define USEGLEW 
 #include "CSCIx229.h"
 GLFWwindow* window = NULL;
 // Keys
@@ -13,6 +12,10 @@ int proj = 1;
 double asp = 1;
 int dim = 1;
 int fov = 59;
+// Light
+double ambient=0;
+double diffuse=100;
+double specular=100;
 // Camera
 double cam[3] = { 0,0,-1 };
 double th=90, ph=0;
@@ -20,6 +23,8 @@ double th=90, ph=0;
 double progTime = 0;
 double deltaTime = 0;
 bool paused = false;
+// Buffers
+unsigned int planeVbo;
 
 // Take cross product (a x b) and store result in argument 3
 void Cross(double a[3], double b[3], double result[3]) {
@@ -35,22 +40,124 @@ void LookDirection(float ph, float th, double lookDir[3]) {
     lookDir[2] = -Cos(th)*Cos(ph);
 }
 
+void Camera() {
+    Project(fov,asp,dim);
+    double dir[3];
+    LookDirection(ph,th,dir);
+    gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+}
+
+void Plane() {
+    glColor3f(0,.8,0);
+    glBegin(GL_TRIANGLES);
+    glVertex3f(-2,-1,-2);
+    glVertex3f(-2,-1, 2);
+    glVertex3f( 2,-1,-2);
+
+    glVertex3f( 2,-1,-2);
+    glVertex3f(-2,-1, 2);
+    glVertex3f( 2,-1, 2);
+    glEnd();
+}
+
+float branchNormals[] = {
+
+};
+
+void Branch() {
+    // Trunk
+    glColor3f(1,0,0);
+    glBegin(GL_QUAD_STRIP);
+    glNormal3f(-.167, 0,-.167); glVertex3f(  -.167,-1,  -.167);
+    glNormal3f(-.033, 0, .233); glVertex3f(  -.033,-1,   .233);
+    glNormal3f(-.167,.5,-.167); glVertex3f(-.167/2, 1,-.167/2);
+    glNormal3f(-.033,.5, .233); glVertex3f(-.033/2, 1, .233/2);
+
+    glNormal3f(-.033, 0, .233); glVertex3f(  -.033,-1,   .233);
+    glNormal3f( .233, 0,-.033); glVertex3f(   .233,-1,  -.033);
+    glNormal3f(-.033,.5, .233); glVertex3f(-.033/2, 1, .233/2);
+    glNormal3f( .233,.5,-.033); glVertex3f( .233/2, 1,-.033/2);
+
+    glNormal3f( .233, 0,-.033); glVertex3f(   .233,-1,  -.033);
+    glNormal3f(-.167, 0,-.167); glVertex3f(  -.167,-1,  -.167);
+    glNormal3f( .233,.5,-.033); glVertex3f( .233/2, 1,-.033/2);
+    glNormal3f(-.167,.5,-.167); glVertex3f(-.167/2, 1,-.167/2);
+    glEnd();
+
+    // Top
+    glBegin(GL_TRIANGLE_FAN);
+    glNormal3f( 0, 1, 0); glVertex3f( 0,1.3, 0);
+    glNormal3f(-.033, .5, .233); glVertex3f(-.033/2, 1, .233/2);
+    glNormal3f( .233, .5,-.033); glVertex3f( .233/2, 1,-.033/2);
+    glNormal3f(-.167, .5,-.167); glVertex3f(-.167/2, 1,-.167/2);
+    glNormal3f(-.033, .5, .233); glVertex3f(-.033/2, 1, .233/2);
+    glEnd();
+
+    // Leaf
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,1);
+    glColor3f(0,.6,0);
+    glBegin(GL_POLYGON);
+    glNormal3f(0,0,-1);
+    glVertex3f(  0,1.2,0);
+    glVertex3f(-.1,1.3,0);
+    glVertex3f(  0,1.6,0);
+    glVertex3f( .1,1.3,0);
+    glEnd();
+    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,0);
+}
+
+void Tree() {
+    Branch();
+
+    ErrCheck("tree");
+}
+
+void Light() {
+    //  Translate intensity to color vectors
+    float Ambient[]   = {ambient*.01,ambient*.01,ambient*.01,1.0};
+    float Diffuse[]   = {diffuse*.01,diffuse*.01,diffuse*.01,1.0};
+    float Specular[]  = {specular*.01,specular*.01,specular*.01,1.0};
+    //  Light position
+    float Position[]  = {2*Cos(progTime*50),1,2*Sin(progTime*50),1}; //{distance*Cos(zh),ylight,distance*Sin(zh),1.0};
+
+    // Draw point light
+    glDisable(GL_LIGHTING);
+    glColor3f(1,1,1);
+    glPointSize(5);
+    glBegin(GL_POINTS);
+    glVertex4fv(Position);
+    glEnd();
+
+    //  OpenGL should normalize normal vectors
+    glEnable(GL_NORMALIZE);
+    //  Enable lighting
+    glEnable(GL_LIGHTING);
+    //  Location of viewer for specular calculations
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER,1);
+    //  glColor sets ambient and diffuse color materials
+    glColorMaterial(GL_FRONT_AND_BACK,GL_AMBIENT_AND_DIFFUSE);
+    glEnable(GL_COLOR_MATERIAL);
+    //  Enable light 0
+    glEnable(GL_LIGHT0);
+    //  Set ambient, diffuse, specular components and position of light 0
+    glLightfv(GL_LIGHT0,GL_AMBIENT ,Ambient);
+    glLightfv(GL_LIGHT0,GL_DIFFUSE ,Diffuse);
+    glLightfv(GL_LIGHT0,GL_SPECULAR,Specular);
+    glLightfv(GL_LIGHT0,GL_POSITION,Position);
+
+    ErrCheck("lighting");
+}
+
 void display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glLoadIdentity();
 
-    Project(fov,asp,dim);
-    double dir[3];
-    LookDirection(ph,th,dir);
-    gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+    Camera();
+    Light();
 
-    glColor3f(1,1,1);
-    glBegin(GL_POLYGON);
-    glVertex2f(-1,-1);
-    glVertex2f( 0, 1);
-    glVertex2f( 1,-1);
-    glEnd();
+    Plane();
+    Tree();
 
     ErrCheck("display"); // Check for gl errors
     glFlush();
@@ -202,6 +309,7 @@ int main(int argc, char** argv) {
     //  Main loop
     while (!glfwWindowShouldClose(window))
     {
+        updateTime();
         handleUserInputs();
         display();
         glfwSwapBuffers(window);
