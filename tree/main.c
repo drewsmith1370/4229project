@@ -24,7 +24,43 @@ double progTime = 0;
 double deltaTime = 0;
 bool paused = false;
 // Buffers
-unsigned int planeVbo;
+unsigned int treeVao;
+// Shaders
+unsigned int shader;
+
+typedef struct Vertex_t {
+    float p [3]; // pos
+    float n [3]; // nrm
+    float c [3]; // col
+    float t [2]; // tex
+} Vertex_t;
+
+// VBO Data (Position, normal, color, and texture associated with each vertex)
+Vertex_t treeBuffer[] = {
+    // Base triangle
+    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 0
+    {.p = {-.033,-1, .233}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 1
+    {.p = { .233,-1,-.033}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 2
+    // Top triangle
+    {.p = {-.167, 1,-.167}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 3
+    {.p = {-.033, 1, .233}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 4
+    {.p = { .233, 1,-.033}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 5
+    // Tip
+    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {1,0,0}, .t = {0,0}}, // 6
+};
+
+// IBO Data (Order of vertices to draw tree as polygons)
+int treeIdxBuffer[] = {
+    0,1,2, // Bottom
+    // Face 1
+    0,3,1 , 3,4,1,
+    // Face 2
+    1,4,2 , 4,5,2,
+    // Face 3
+    2,5,0 , 5,3,0,
+    // Tip
+    3,6,4 , 4,6,5 , 5,6,3,
+};
 
 // Take cross product (a x b) and store result in argument 3
 void Cross(double a[3], double b[3], double result[3]) {
@@ -49,6 +85,7 @@ void Camera() {
 
 void Plane() {
     glColor3f(0,.8,0);
+    glNormal3f(0,1,0);
     glBegin(GL_TRIANGLES);
     glVertex3f(-2,-1,-2);
     glVertex3f(-2,-1, 2);
@@ -59,10 +96,6 @@ void Plane() {
     glVertex3f( 2,-1, 2);
     glEnd();
 }
-
-float branchNormals[] = {
-
-};
 
 void Branch() {
     // Trunk
@@ -86,7 +119,7 @@ void Branch() {
 
     // Top
     glBegin(GL_TRIANGLE_FAN);
-    glNormal3f( 0, 1, 0); glVertex3f( 0,1.3, 0);
+    glNormal3f( 0, 1, 0);        glVertex3f( 0,1.3, 0);
     glNormal3f(-.033, .5, .233); glVertex3f(-.033/2, 1, .233/2);
     glNormal3f( .233, .5,-.033); glVertex3f( .233/2, 1,-.033/2);
     glNormal3f(-.167, .5,-.167); glVertex3f(-.167/2, 1,-.167/2);
@@ -157,7 +190,11 @@ void display() {
     Light();
 
     Plane();
-    Tree();
+    // Tree();
+    glUseProgram(shader);
+    glBindVertexArray(treeVao);
+    glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
+    glUseProgram(0);
 
     ErrCheck("display"); // Check for gl errors
     glFlush();
@@ -281,6 +318,184 @@ void updateTime() {
    progTime = now;
 }
 
+/*
+ *  Read text file
+ */
+char* ReadText(char *file)
+{
+   char* buffer;
+   //  Open file
+   FILE* f = fopen(file,"rt");
+   if (!f) Fatal("Cannot open text file %s\n",file);
+   //  Seek to end to determine size, then rewind
+   fseek(f,0,SEEK_END);
+   int n = ftell(f);
+   rewind(f);
+   //  Allocate memory for the whole file
+   buffer = (char*)malloc(n+1);
+   if (!buffer) Fatal("Cannot allocate %d bytes for text file %s\n",n+1,file);
+   //  Snarf the file
+   if (fread(buffer,n,1,f)!=1) Fatal("Cannot read %d bytes for text file %s\n",n,file);
+   buffer[n] = 0;
+   //  Close and return
+   fclose(f);
+   return buffer;
+}
+
+/*
+ *  Print Shader Log
+ */
+void PrintShaderLog(int obj,char* file)
+{
+   int len=0;
+   glGetShaderiv(obj,GL_INFO_LOG_LENGTH,&len);
+   if (len>1)
+   {
+      int n=0;
+      char* buffer = (char *)malloc(len);
+      if (!buffer) Fatal("Cannot allocate %d bytes of text for shader log\n",len);
+      glGetShaderInfoLog(obj,len,&n,buffer);
+      fprintf(stderr,"%s:\n%s\n",file,buffer);
+      free(buffer);
+   }
+   glGetShaderiv(obj,GL_COMPILE_STATUS,&len);
+   if (!len) Fatal("Error compiling %s\n",file);
+}
+
+/*
+ *  Print Program Log
+ */
+void PrintProgramLog(int obj)
+{
+   int len=0;
+   glGetProgramiv(obj,GL_INFO_LOG_LENGTH,&len);
+   if (len>1)
+   {
+      int n=0;
+      char* buffer = (char *)malloc(len);
+      if (!buffer) Fatal("Cannot allocate %d bytes of text for program log\n",len);
+      glGetProgramInfoLog(obj,len,&n,buffer);
+      fprintf(stderr,"%s\n",buffer);
+   }
+   glGetProgramiv(obj,GL_LINK_STATUS,&len);
+   if (!len) Fatal("Error linking program\n");
+}
+
+/*
+ *  Create Shader
+ */
+int CreateShader(GLenum type,char* file)
+{
+   //  Create the shader
+   int shader = glCreateShader(type);
+   //  Load source code from file
+   char* source = ReadText(file);
+   glShaderSource(shader,1,(const char**)&source,NULL);
+   free(source);
+   //  Compile the shader
+   fprintf(stderr,"Compile %s\n",file);
+   glCompileShader(shader);
+   //  Check for errors
+   PrintShaderLog(shader,file);
+   //  Return name
+   return shader;
+}
+
+/*
+ *  Create Shader Program
+ */
+int CreateShaderProg(char* VertFile,char* FragFile)
+{
+   //  Create program
+   int prog = glCreateProgram();
+   //  Create and compile vertex shader
+   int vert = CreateShader(GL_VERTEX_SHADER,VertFile);
+   //  Create and compile fragment shader
+   int frag = CreateShader(GL_FRAGMENT_SHADER,FragFile);
+   //  Attach vertex shader
+   glAttachShader(prog,vert);
+   //  Attach fragment shader
+   glAttachShader(prog,frag);
+   //  Link program
+   glLinkProgram(prog);
+   //  Check for errors
+   PrintProgramLog(prog);
+   //  Return name
+   return prog;
+}
+
+/*
+ *  Create Geometry Shader Program
+ */
+int CreateGeomProg(char* VertFile,char* GeomFile,char* FragFile)
+{
+   //  Create program
+   int prog = glCreateProgram();
+   //  Create and compile vertex shader
+   int vert = CreateShader(GL_VERTEX_SHADER  ,VertFile);
+   //  Added Geometry shader
+   int geom = CreateShader(GL_GEOMETRY_SHADER,GeomFile);
+   //  Create and compile fragment shader
+   int frag = CreateShader(GL_FRAGMENT_SHADER,FragFile);
+   //  Attach vertex shader
+   glAttachShader(prog,vert);
+   //  Attach geometry shader
+   glAttachShader(prog,geom);
+   //  Attach fragment shader
+   glAttachShader(prog,frag);
+   //  Link program
+   glLinkProgram(prog);
+   //  Check for errors
+   PrintProgramLog(prog);
+   //  Return name
+   return prog;
+}
+
+
+/*
+ *  Create Compute Shader Program
+ */
+int CreateComputeProg(char* CompFile)
+{
+   int prog = glCreateProgram();
+   int comp = CreateShader(GL_COMPUTE_SHADER, CompFile);
+
+   glAttachShader(prog,comp);
+
+   glLinkProgram(prog);
+   PrintProgramLog(prog);
+   
+   return prog;
+}
+
+//
+// Helper function to create a VAO with static draw for storing an object
+//
+GLuint CreateStaticVertexBuffer(int vsize, void* vdata, int isize, void* idata) {
+    // Make vertex buffer object
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, vsize, vdata, GL_STATIC_DRAW);
+
+    // Make Index buffer object
+    GLuint ibo;
+    glGenBuffers(1, &ibo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, isize, idata, GL_STATIC_DRAW);
+
+    // Combine as buffer array object
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    // Bind VBO and IBO
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+
+    return vao;
+}
+
 int main(int argc, char** argv) {
     if (!glfwInit()) {
         fprintf(stderr,"Cannot Initialize GLFW");
@@ -306,6 +521,21 @@ int main(int argc, char** argv) {
     glfwSetFramebufferSizeCallback(window,reshape);
     glfwSetKeyCallback(window,handleKey);
 
+    // VAO
+    int vbosize = sizeof(treeBuffer);
+    int ibosize = sizeof(treeIdxBuffer);
+    treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
+    // Set vertex attribute pointers
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
+    // Enable VAO
+    glEnableVertexAttribArray(0);
+
+    shader = CreateShaderProg("tree.vert","tree.frag");
+
+    ErrCheck("init");
     //  Main loop
     while (!glfwWindowShouldClose(window))
     {
