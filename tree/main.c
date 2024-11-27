@@ -16,6 +16,7 @@ int fov = 59;
 double ambient=0;
 double diffuse=100;
 double specular=100;
+float lightPos[3] = {0};
 // Camera
 double cam[3] = { 0,0,-1 };
 double th=90, ph=0;
@@ -27,6 +28,8 @@ bool paused = false;
 unsigned int treeVao;
 // Shaders
 unsigned int shader;
+unsigned int matrixUniform[2];
+unsigned int lightUniform;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -39,12 +42,12 @@ typedef struct Vertex_t {
 Vertex_t treeBuffer[] = {
     // Base triangle
     {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 0
-    {.p = {-.033,-1, .233}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 1
-    {.p = { .233,-1,-.033}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 2
+    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {1,0,0}, .t = {0,0}}, // 1
+    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {1,0,0}, .t = {0,0}}, // 2
     // Top triangle
     {.p = {-.167, 1,-.167}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 3
-    {.p = {-.033, 1, .233}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 4
-    {.p = { .233, 1,-.033}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 5
+    {.p = {-.033, 1, .233}, .n = {-.033,.5, .233}, .c = {1,0,0}, .t = {0,0}}, // 4
+    {.p = { .233, 1,-.033}, .n = { .233,.5,-.033}, .c = {1,0,0}, .t = {0,0}}, // 5
     // Tip
     {.p = {0,1.3,0},        .n = {0,1,0},          .c = {1,0,0}, .t = {0,0}}, // 6
 };
@@ -87,13 +90,13 @@ void Plane() {
     glColor3f(0,.8,0);
     glNormal3f(0,1,0);
     glBegin(GL_TRIANGLES);
-    glVertex3f(-2,-1,-2);
-    glVertex3f(-2,-1, 2);
-    glVertex3f( 2,-1,-2);
+    glVertex3f(-5,-1,-5);
+    glVertex3f(-5,-1, 5);
+    glVertex3f( 5,-1,-5);
 
-    glVertex3f( 2,-1,-2);
-    glVertex3f(-2,-1, 2);
-    glVertex3f( 2,-1, 2);
+    glVertex3f( 5,-1,-5);
+    glVertex3f(-5,-1, 5);
+    glVertex3f( 5,-1, 5);
     glEnd();
 }
 
@@ -140,9 +143,26 @@ void Branch() {
 }
 
 void Tree() {
-    Branch();
+    // Fetch Modelview matrix (In future I might make my own matrix stack)
+    GLfloat mvptr[16], projptr[16];
+    glGetFloatv(GL_MODELVIEW_MATRIX,mvptr);
+    glGetFloatv(GL_PROJECTION_MATRIX,projptr);
+
+    // Use shader to draw buffer
+    glUseProgram(shader);
+    // Set Uniforms
+    glUniformMatrix4fv(matrixUniform[0],1,false,mvptr);
+    glUniformMatrix4fv(matrixUniform[1],1,false,projptr);
+    glUniform3fv(lightUniform,1,lightPos);
+    // Bind vao
+    glBindVertexArray(treeVao);
+    // Draw
+    glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
+    // Stop using shader
+    glUseProgram(0);
 
     ErrCheck("tree");
+    return;
 }
 
 void Light() {
@@ -152,6 +172,10 @@ void Light() {
     float Specular[]  = {specular*.01,specular*.01,specular*.01,1.0};
     //  Light position
     float Position[]  = {2*Cos(progTime*50),1,2*Sin(progTime*50),1}; //{distance*Cos(zh),ylight,distance*Sin(zh),1.0};
+
+    lightPos[0] = Position[0];
+    lightPos[1] = Position[1];
+    lightPos[2] = Position[2];
 
     // Draw point light
     glDisable(GL_LIGHTING);
@@ -190,11 +214,8 @@ void display() {
     Light();
 
     Plane();
-    // Tree();
-    glUseProgram(shader);
-    glBindVertexArray(treeVao);
-    glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
-    glUseProgram(0);
+    Tree();
+    
 
     ErrCheck("display"); // Check for gl errors
     glFlush();
@@ -282,6 +303,12 @@ void handleUserInputs() {
                 cam[0] += speed * side[0];
                 cam[1] += speed * side[1];
                 cam[2] += speed * side[2];
+                break;
+            case ' ':
+                cam[1] += speed;
+                break;
+            case 'C':
+                cam[1] -= speed;
                 break;
             default: break;
         }
@@ -496,6 +523,45 @@ GLuint CreateStaticVertexBuffer(int vsize, void* vdata, int isize, void* idata) 
     return vao;
 }
 
+//
+//  Compile and link shader programs, and initialize VAO for vertex data
+//
+void InitializeShadersAndVAO() {
+    // VAO
+    int vbosize = sizeof(treeBuffer);
+    int ibosize = sizeof(treeIdxBuffer);
+    treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
+    
+
+    // Make shader programs
+    shader = CreateShaderProg("tree.vert","tree.frag");
+    // Find uniforms
+    matrixUniform[0] = glGetUniformLocation(shader,"ModelView");
+    matrixUniform[1] = glGetUniformLocation(shader,"Projection");
+    lightUniform = glGetUniformLocation(shader,"LightPos");
+
+    // Get locations of attributes in shader
+    int posLoc = glGetAttribLocation(shader,"position");
+    int nrmLoc = glGetAttribLocation(shader,"normal");
+    int colLoc = glGetAttribLocation(shader,"color");
+    int texLoc = glGetAttribLocation(shader,"texture");
+    printf("%i %i %i\n",nrmLoc,colLoc,texLoc);
+
+    // Enable VAOs
+    glEnableVertexAttribArray(posLoc);
+    glEnableVertexAttribArray(nrmLoc);
+    glEnableVertexAttribArray(colLoc);
+    glEnableVertexAttribArray(texLoc);
+
+    // Set vertex attribute pointers
+    glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
+    glVertexAttribPointer(nrmLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
+    glVertexAttribPointer(colLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
+    glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
+
+    return;
+}
+
 int main(int argc, char** argv) {
     if (!glfwInit()) {
         fprintf(stderr,"Cannot Initialize GLFW");
@@ -521,19 +587,8 @@ int main(int argc, char** argv) {
     glfwSetFramebufferSizeCallback(window,reshape);
     glfwSetKeyCallback(window,handleKey);
 
-    // VAO
-    int vbosize = sizeof(treeBuffer);
-    int ibosize = sizeof(treeIdxBuffer);
-    treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
-    // Set vertex attribute pointers
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
-    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
-    // Enable VAO
-    glEnableVertexAttribArray(0);
-
-    shader = CreateShaderProg("tree.vert","tree.frag");
+    // Init shaders
+    InitializeShadersAndVAO();
 
     ErrCheck("init");
     //  Main loop
