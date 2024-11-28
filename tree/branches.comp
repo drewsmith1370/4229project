@@ -1,0 +1,46 @@
+#version 430 core
+#define PI 3.14
+
+layout (local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+struct Instance {
+    mat4 transform;
+};
+
+layout (std430, binding = 0) buffer Instances
+{
+    Instance instances[];
+};
+
+uniform mat4 FractalTransform;
+const uint depth = 4;
+
+mat4 rotationMatrix(float th) {
+    return mat4(
+        vec4(cos(th),0,-sin(th),0),
+        vec4(      0,1,0,0),
+        vec4(sin(th),0, cos(th),0),
+        vec4(      0,0,0,1)
+    );
+}
+
+void main() {
+    // Get the index of the current invocation
+    uint idx = gl_GlobalInvocationID.x;
+    mat4 matrix = mat4( // Identity matrix
+        vec4(1,0,0,0),
+        vec4(0,1,0,0),
+        vec4(0,0,1,0),
+        vec4(0,0,0,1)
+    );
+
+    int h = int(log2(2*idx+1) / log2(3));
+    
+    float th = 0;
+    for (int i=0;i<h;i++) {
+        th = PI/1.3 * ((idx / int(pow(3,i))) % 3);
+        matrix = rotationMatrix(th) * FractalTransform * matrix;
+    }
+
+    instances[idx].transform = matrix;
+}
