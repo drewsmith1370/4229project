@@ -27,9 +27,13 @@ bool paused = false;
 // Buffers
 unsigned int treeVao;
 // Shaders
+unsigned int instanceBranches;
 unsigned int shader;
 unsigned int matrixUniform[2];
 unsigned int lightUniform;
+unsigned int fracUniform;
+// Instances
+#define NUM_BRANCHES 1024 * 100
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -41,15 +45,15 @@ typedef struct Vertex_t {
 // VBO Data (Position, normal, color, and texture associated with each vertex)
 Vertex_t treeBuffer[] = {
     // Base triangle
-    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {1,0,0}, .t = {0,0}}, // 0
-    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {1,0,0}, .t = {0,0}}, // 1
-    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {1,0,0}, .t = {0,0}}, // 2
+    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 0
+    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 1
+    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 2
     // Top triangle
-    {.p = {-.167, 1,-.167}, .n = {-.167,.5,-.167}, .c = {1,0,0}, .t = {0,0}}, // 3
-    {.p = {-.033, 1, .233}, .n = {-.033,.5, .233}, .c = {1,0,0}, .t = {0,0}}, // 4
-    {.p = { .233, 1,-.033}, .n = { .233,.5,-.033}, .c = {1,0,0}, .t = {0,0}}, // 5
+    {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 3
+    {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 4
+    {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 5
     // Tip
-    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {1,0,0}, .t = {0,0}}, // 6
+    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {0,0}}, // 6
 };
 
 // IBO Data (Order of vertices to draw tree as polygons)
@@ -100,53 +104,16 @@ void Plane() {
     glEnd();
 }
 
-void Branch() {
-    // Trunk
-    glColor3f(1,0,0);
-    glBegin(GL_QUAD_STRIP);
-    glNormal3f(-.167, 0,-.167); glVertex3f(  -.167,-1,  -.167);
-    glNormal3f(-.033, 0, .233); glVertex3f(  -.033,-1,   .233);
-    glNormal3f(-.167,.5,-.167); glVertex3f(-.167/2, 1,-.167/2);
-    glNormal3f(-.033,.5, .233); glVertex3f(-.033/2, 1, .233/2);
-
-    glNormal3f(-.033, 0, .233); glVertex3f(  -.033,-1,   .233);
-    glNormal3f( .233, 0,-.033); glVertex3f(   .233,-1,  -.033);
-    glNormal3f(-.033,.5, .233); glVertex3f(-.033/2, 1, .233/2);
-    glNormal3f( .233,.5,-.033); glVertex3f( .233/2, 1,-.033/2);
-
-    glNormal3f( .233, 0,-.033); glVertex3f(   .233,-1,  -.033);
-    glNormal3f(-.167, 0,-.167); glVertex3f(  -.167,-1,  -.167);
-    glNormal3f( .233,.5,-.033); glVertex3f( .233/2, 1,-.033/2);
-    glNormal3f(-.167,.5,-.167); glVertex3f(-.167/2, 1,-.167/2);
-    glEnd();
-
-    // Top
-    glBegin(GL_TRIANGLE_FAN);
-    glNormal3f( 0, 1, 0);        glVertex3f( 0,1.3, 0);
-    glNormal3f(-.033, .5, .233); glVertex3f(-.033/2, 1, .233/2);
-    glNormal3f( .233, .5,-.033); glVertex3f( .233/2, 1,-.033/2);
-    glNormal3f(-.167, .5,-.167); glVertex3f(-.167/2, 1,-.167/2);
-    glNormal3f(-.033, .5, .233); glVertex3f(-.033/2, 1, .233/2);
-    glEnd();
-
-    // Leaf
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,1);
-    glColor3f(0,.6,0);
-    glBegin(GL_POLYGON);
-    glNormal3f(0,0,-1);
-    glVertex3f(  0,1.2,0);
-    glVertex3f(-.1,1.3,0);
-    glVertex3f(  0,1.6,0);
-    glVertex3f( .1,1.3,0);
-    glEnd();
-    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE,0);
-}
-
 void Tree() {
     // Fetch Modelview matrix (In future I might make my own matrix stack)
     GLfloat mvptr[16], projptr[16];
     glGetFloatv(GL_MODELVIEW_MATRIX,mvptr);
     glGetFloatv(GL_PROJECTION_MATRIX,projptr);
+
+    // Use Compute shader
+    glUseProgram(instanceBranches);
+    glDispatchCompute(100,1,1);
+    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Use shader to draw buffer
     glUseProgram(shader);
@@ -157,7 +124,7 @@ void Tree() {
     // Bind vao
     glBindVertexArray(treeVao);
     // Draw
-    glDrawElements(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0);
+    glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, NUM_BRANCHES);
     // Stop using shader
     glUseProgram(0);
 
@@ -452,34 +419,6 @@ int CreateShaderProg(char* VertFile,char* FragFile)
 }
 
 /*
- *  Create Geometry Shader Program
- */
-int CreateGeomProg(char* VertFile,char* GeomFile,char* FragFile)
-{
-   //  Create program
-   int prog = glCreateProgram();
-   //  Create and compile vertex shader
-   int vert = CreateShader(GL_VERTEX_SHADER  ,VertFile);
-   //  Added Geometry shader
-   int geom = CreateShader(GL_GEOMETRY_SHADER,GeomFile);
-   //  Create and compile fragment shader
-   int frag = CreateShader(GL_FRAGMENT_SHADER,FragFile);
-   //  Attach vertex shader
-   glAttachShader(prog,vert);
-   //  Attach geometry shader
-   glAttachShader(prog,geom);
-   //  Attach fragment shader
-   glAttachShader(prog,frag);
-   //  Link program
-   glLinkProgram(prog);
-   //  Check for errors
-   PrintProgramLog(prog);
-   //  Return name
-   return prog;
-}
-
-
-/*
  *  Create Compute Shader Program
  */
 int CreateComputeProg(char* CompFile)
@@ -520,7 +459,47 @@ GLuint CreateStaticVertexBuffer(int vsize, void* vdata, int isize, void* idata) 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
 
+    // Return name of vao
     return vao;
+}
+
+//
+// Create and bind SSBO for branch instances
+//
+GLuint CreateSSBO() {
+    // Create SSBO
+    GLuint ssbo;
+    glGenBuffers(1, &ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+
+    // Define instance data
+    typedef struct Instance {
+        float transform[16];
+    } Instance;
+
+    struct Instance instances[NUM_BRANCHES];
+
+    // Create identity for each instance
+    float temp[16];
+    temp[0] = 1; temp[4] = 0; temp[ 8] = 0; temp[12] = 0;
+    temp[1] = 0; temp[5] = 1; temp[ 9] = 0; temp[13] = 0;
+    temp[2] = 0; temp[6] = 0; temp[10] = 1; temp[14] = 0;
+    temp[3] = 0; temp[7] = 0; temp[11] = 0; temp[15] = 1;
+
+    for (int i=0;i<NUM_BRANCHES;i++) {
+        for (int j=0;j<16;j++) {
+            instances[i].transform[j] = temp[j];
+        }
+    }
+
+    // Fill SSBO with instance data
+    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(instances), instances, GL_STATIC_DRAW);
+
+    // Bind SSBO to shader
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    return ssbo;
 }
 
 //
@@ -531,35 +510,58 @@ void InitializeShadersAndVAO() {
     int vbosize = sizeof(treeBuffer);
     int ibosize = sizeof(treeIdxBuffer);
     treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
+    CreateSSBO();
     
 
     // Make shader programs
+    instanceBranches = CreateComputeProg("branches.comp");
     shader = CreateShaderProg("tree.vert","tree.frag");
     // Find uniforms
     matrixUniform[0] = glGetUniformLocation(shader,"ModelView");
     matrixUniform[1] = glGetUniformLocation(shader,"Projection");
     lightUniform = glGetUniformLocation(shader,"LightPos");
+    fracUniform = glGetUniformLocation(instanceBranches,"FractalTransform");
 
     // Get locations of attributes in shader
     int posLoc = glGetAttribLocation(shader,"position");
     int nrmLoc = glGetAttribLocation(shader,"normal");
     int colLoc = glGetAttribLocation(shader,"color");
-    int texLoc = glGetAttribLocation(shader,"texture");
-    printf("%i %i %i\n",nrmLoc,colLoc,texLoc);
+    // int texLoc = glGetAttribLocation(shader,"texture");
 
     // Enable VAOs
     glEnableVertexAttribArray(posLoc);
     glEnableVertexAttribArray(nrmLoc);
     glEnableVertexAttribArray(colLoc);
-    glEnableVertexAttribArray(texLoc);
+    // glEnableVertexAttribArray(texLoc);
 
     // Set vertex attribute pointers
     glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
     glVertexAttribPointer(nrmLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
     glVertexAttribPointer(colLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
-    glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
+    // glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
 
     return;
+}
+
+void SetFractalTransforms() {
+    float fracTrans[16];
+    fracTrans[0] = .7071; fracTrans[4] = .7071; fracTrans[ 8] = 0; fracTrans[12] = .8071;
+    fracTrans[1] =-.7071; fracTrans[5] = .7071; fracTrans[ 9] = 0; fracTrans[13] = 1.8071;
+    fracTrans[2] =     0; fracTrans[6] =     0; fracTrans[10] = 1; fracTrans[14] = 0;
+    fracTrans[3] =     0; fracTrans[7] =     0; fracTrans[11] = 0; fracTrans[15] = 1.45;
+
+    // array([[ 0.7071,  0.7071,  0.    ,  0.7071],
+    //    [-0.7071,  0.7071,  0.    ,  1.7071],
+    //    [ 0.    ,  0.    ,  1.    ,  0.    ],
+    //    [ 0.    ,  0.    ,  0.    ,  2.    ]])
+
+
+    // Set uniform
+    glUseProgram(instanceBranches);
+    glUniformMatrix4fv(fracUniform,1,false,fracTrans);
+    glUseProgram(0);
+
+    ErrCheck("fractal uniform");
 }
 
 int main(int argc, char** argv) {
@@ -589,6 +591,7 @@ int main(int argc, char** argv) {
 
     // Init shaders
     InitializeShadersAndVAO();
+    SetFractalTransforms();
 
     ErrCheck("init");
     //  Main loop
