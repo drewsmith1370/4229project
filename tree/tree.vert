@@ -25,8 +25,10 @@ out vec2 vTex;
 out vec3 vLightPos;
 
 void main() {
+    mat4 trans = instances[gl_InstanceID].transform;
+    if (color.g == 1) trans[3][3] = 1;
     vec4 lPos = ModelView * vec4(LightPos,1);
-    vec4 Pos = ModelView * instances[gl_InstanceID].transform * vec4(position,1);
+    vec4 Pos = ModelView * trans * vec4(position,1);
     gl_Position = Projection * Pos;
 
     vPos = Pos.xyz;

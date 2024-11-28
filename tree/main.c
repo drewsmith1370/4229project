@@ -29,11 +29,13 @@ unsigned int treeVao;
 // Shaders
 unsigned int instanceBranches;
 unsigned int shader;
-unsigned int matrixUniform[2];
-unsigned int lightUniform;
+unsigned int leafShader;
+unsigned int matrixUniform[4];
+unsigned int lightUniform[2];
 unsigned int fracUniform;
 // Instances
 #define NUM_BRANCHES 1024 * 100
+int treeAngle = 45;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -54,6 +56,8 @@ Vertex_t treeBuffer[] = {
     {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 5
     // Tip
     {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {0,0}}, // 6
+    // Leaf
+    {.p = { 0,1.2,0},       .n = {0,0,1},         .c = {0,1,0}, .t = {0,0}}, // 7
 };
 
 // IBO Data (Order of vertices to draw tree as polygons)
@@ -67,6 +71,8 @@ int treeIdxBuffer[] = {
     2,5,0 , 5,3,0,
     // Tip
     3,6,4 , 4,6,5 , 5,6,3,
+    // Leaf
+    7,
 };
 
 // Take cross product (a x b) and store result in argument 3
@@ -120,11 +126,20 @@ void Tree() {
     // Set Uniforms
     glUniformMatrix4fv(matrixUniform[0],1,false,mvptr);
     glUniformMatrix4fv(matrixUniform[1],1,false,projptr);
-    glUniform3fv(lightUniform,1,lightPos);
+    glUniform3fv(lightUniform[0],1,lightPos);
     // Bind vao
     glBindVertexArray(treeVao);
     // Draw
     glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, NUM_BRANCHES);
+
+    // Leaves
+    glUseProgram(leafShader);
+    // Set Uniforms
+    glUniformMatrix4fv(matrixUniform[2],1,false,mvptr);
+    glUniformMatrix4fv(matrixUniform[3],1,false,projptr);
+    glUniform3fv(lightUniform[1],1,lightPos);
+    // Draw
+    glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), NUM_BRANCHES);
     // Stop using shader
     glUseProgram(0);
 
@@ -138,7 +153,7 @@ void Light() {
     float Diffuse[]   = {diffuse*.01,diffuse*.01,diffuse*.01,1.0};
     float Specular[]  = {specular*.01,specular*.01,specular*.01,1.0};
     //  Light position
-    float Position[]  = {2*Cos(progTime*50),1,2*Sin(progTime*50),1}; //{distance*Cos(zh),ylight,distance*Sin(zh),1.0};
+    float Position[]  = {5*Cos(progTime*50),1,5*Sin(progTime*50),1}; //{distance*Cos(zh),ylight,distance*Sin(zh),1.0};
 
     lightPos[0] = Position[0];
     lightPos[1] = Position[1];
@@ -194,10 +209,40 @@ void ClearKeys() {
     }
 }
 
+void SetFractalTransforms(int rotAngle) {
+    float fracTrans[16];
+    fracTrans[0] = Cos(rotAngle); fracTrans[4] = Sin(rotAngle); fracTrans[ 8] = 0; fracTrans[12] = .8071;
+    fracTrans[1] =-Sin(rotAngle); fracTrans[5] = Cos(rotAngle); fracTrans[ 9] = 0; fracTrans[13] = 1.8071;
+    fracTrans[2] =     0; fracTrans[6] =     0; fracTrans[10] = 1; fracTrans[14] = 0;
+    fracTrans[3] =     0; fracTrans[7] =     0; fracTrans[11] = 0; fracTrans[15] = 1.45;
+
+    // array([[ 0.7071,  0.7071,  0.    ,  0.7071],
+    //    [-0.7071,  0.7071,  0.    ,  1.7071],
+    //    [ 0.    ,  0.    ,  1.    ,  0.    ],
+    //    [ 0.    ,  0.    ,  0.    ,  2.    ]])
+
+
+    // Set uniform
+    glUseProgram(instanceBranches);
+    glUniformMatrix4fv(fracUniform,1,false,fracTrans);
+    glUseProgram(0);
+
+    ErrCheck("fractal uniform");
+}
+
 void handleKey(GLFWwindow* window,int key,int scancode,int action,int mods) {
     bool setTo;
     if (action == GLFW_PRESS) {
         setTo = true;
+
+        if (key == '[') {
+            treeAngle++;
+            SetFractalTransforms(treeAngle);
+        }
+        if (key == ']') {
+            treeAngle--;
+            SetFractalTransforms(treeAngle);
+        }
     }
     else if (action == GLFW_RELEASE) {
         setTo = false;
@@ -419,6 +464,33 @@ int CreateShaderProg(char* VertFile,char* FragFile)
 }
 
 /*
+ *  Create Geometry Shader Program
+ */
+int CreateGeomProg(char* VertFile,char* GeomFile,char* FragFile)
+{
+   //  Create program
+   int prog = glCreateProgram();
+   //  Create and compile vertex shader
+   int vert = CreateShader(GL_VERTEX_SHADER  ,VertFile);
+   //  Added Geometry shader
+   int geom = CreateShader(GL_GEOMETRY_SHADER,GeomFile);
+   //  Create and compile fragment shader
+   int frag = CreateShader(GL_FRAGMENT_SHADER,FragFile);
+   //  Attach vertex shader
+   glAttachShader(prog,vert);
+   //  Attach geometry shader
+   glAttachShader(prog,geom);
+   //  Attach fragment shader
+   glAttachShader(prog,frag);
+   //  Link program
+   glLinkProgram(prog);
+   //  Check for errors
+   PrintProgramLog(prog);
+   //  Return name
+   return prog;
+}
+
+/*
  *  Create Compute Shader Program
  */
 int CreateComputeProg(char* CompFile)
@@ -516,10 +588,14 @@ void InitializeShadersAndVAO() {
     // Make shader programs
     instanceBranches = CreateComputeProg("branches.comp");
     shader = CreateShaderProg("tree.vert","tree.frag");
+    leafShader = CreateGeomProg("leaf.vert","leaf.geom","leaf.frag");
     // Find uniforms
     matrixUniform[0] = glGetUniformLocation(shader,"ModelView");
     matrixUniform[1] = glGetUniformLocation(shader,"Projection");
-    lightUniform = glGetUniformLocation(shader,"LightPos");
+    matrixUniform[2] = glGetUniformLocation(leafShader,"ModelView");
+    matrixUniform[3] = glGetUniformLocation(leafShader,"Projection");
+    lightUniform[0] = glGetUniformLocation(shader,"LightPos");
+    lightUniform[1] = glGetUniformLocation(leafShader,"LightPos");
     fracUniform = glGetUniformLocation(instanceBranches,"FractalTransform");
 
     // Get locations of attributes in shader
@@ -541,27 +617,6 @@ void InitializeShadersAndVAO() {
     // glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
 
     return;
-}
-
-void SetFractalTransforms() {
-    float fracTrans[16];
-    fracTrans[0] = .7071; fracTrans[4] = .7071; fracTrans[ 8] = 0; fracTrans[12] = .8071;
-    fracTrans[1] =-.7071; fracTrans[5] = .7071; fracTrans[ 9] = 0; fracTrans[13] = 1.8071;
-    fracTrans[2] =     0; fracTrans[6] =     0; fracTrans[10] = 1; fracTrans[14] = 0;
-    fracTrans[3] =     0; fracTrans[7] =     0; fracTrans[11] = 0; fracTrans[15] = 1.45;
-
-    // array([[ 0.7071,  0.7071,  0.    ,  0.7071],
-    //    [-0.7071,  0.7071,  0.    ,  1.7071],
-    //    [ 0.    ,  0.    ,  1.    ,  0.    ],
-    //    [ 0.    ,  0.    ,  0.    ,  2.    ]])
-
-
-    // Set uniform
-    glUseProgram(instanceBranches);
-    glUniformMatrix4fv(fracUniform,1,false,fracTrans);
-    glUseProgram(0);
-
-    ErrCheck("fractal uniform");
 }
 
 int main(int argc, char** argv) {
@@ -591,7 +646,7 @@ int main(int argc, char** argv) {
 
     // Init shaders
     InitializeShadersAndVAO();
-    SetFractalTransforms();
+    SetFractalTransforms(treeAngle);
 
     ErrCheck("init");
     //  Main loop
