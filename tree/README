@@ -1,6 +1,11 @@
-## Boilerplate Example for CSCI4229 Project
+## Fractal Tree CSCI4229 Screensaver Project
 
 CSCI 4229
 Made by Drew Smith.
+Demonstrates a faster method for drawing fractal trees. By instancing a VAO with various transformations, fuller and faster trees can be drawn, with each branch generated in parallel.
+Inspired by Prof. Vlakkie's fractal tree example. Methodology inspired by YouTuber Acerola's fractal transformations video.
 
 ## Instructions
+
+Use wasd to move, cursor keys to look around
+Use [ and ] to change angle of branch transformation
