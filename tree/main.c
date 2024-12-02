@@ -359,7 +359,7 @@ char* ReadText(char *file)
 {
    char* buffer;
    //  Open file
-   FILE* f = fopen(file,"rt");
+   FILE* f = fopen(file,"rb");
    if (!f) Fatal("Cannot open text file %s\n",file);
    //  Seek to end to determine size, then rewind
    fseek(f,0,SEEK_END);
