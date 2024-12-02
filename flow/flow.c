@@ -118,7 +118,7 @@ char* ReadText(char *file)
 {
    char* buffer;
    //  Open file
-   FILE* f = fopen(file,"rt");
+   FILE* f = fopen(file,"rb");
    if (!f) Fatal("Cannot open text file %s\n",file);
    //  Seek to end to determine size, then rewind
    fseek(f,0,SEEK_END);
@@ -387,25 +387,26 @@ int main(int argc, char** argv) {
    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 
    // Create initial buffer data
-   DotBuffer_t initialBuffer;
+   DotBuffer_t* initialBuffer = malloc(sizeof(DotBuffer_t));
    float rx, ry;
    for (int i=0;i<NUM_DOTS*4;i+=4) {
       rx = (float)rand() / (float)RAND_MAX * 2 - 1;
       ry = (float)rand() / (float)RAND_MAX * 2 - 1;
-      initialBuffer.dotPositions[i  ] = rx;
-      initialBuffer.dotPositions[i+1] = ry;
-      initialBuffer.dotPositions[i+2] = 0;
-      initialBuffer.dotPositions[i+3] = 1;
+      initialBuffer->dotPositions[i  ] = rx;
+      initialBuffer->dotPositions[i+1] = ry;
+      initialBuffer->dotPositions[i+2] = 0;
+      initialBuffer->dotPositions[i+3] = 1;
 
-      initialBuffer.prevPositions[i  ] = rx;
-      initialBuffer.prevPositions[i+1] = ry;
-      initialBuffer.prevPositions[i+2] = 0;
-      initialBuffer.prevPositions[i+3] = 1;
+      initialBuffer->prevPositions[i  ] = rx;
+      initialBuffer->prevPositions[i+1] = ry;
+      initialBuffer->prevPositions[i+2] = 0;
+      initialBuffer->prevPositions[i+3] = 1;
    }
    // Generate buffer with data
-   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DotBuffer_t), &initialBuffer, GL_STATIC_DRAW);
+   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DotBuffer_t), initialBuffer, GL_STATIC_DRAW);
    // Bind buffer to 0 index
    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
+   free(initialBuffer);
 
    // Uniform setup
    timeUniformLocation[0] = glGetUniformLocation(shader[0], "time");

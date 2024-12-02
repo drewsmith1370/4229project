@@ -10,7 +10,7 @@ bool da = false;
 // View
 int proj = 1;
 double asp = 1;
-int dim = 1;
+int dim = 3;
 int fov = 59;
 // Light
 double ambient=0;
@@ -34,8 +34,9 @@ unsigned int matrixUniform[4];
 unsigned int lightUniform[2];
 unsigned int fracUniform;
 // Instances
-#define NUM_BRANCHES 1024 * 100
-int treeAngle = 45;
+#define NUM_INVOCATIONS 300
+#define NUM_BRANCHES 1024 * 300
+float treeAngle = 45;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -118,7 +119,7 @@ void Tree() {
 
     // Use Compute shader
     glUseProgram(instanceBranches);
-    glDispatchCompute(100,1,1);
+    glDispatchCompute(NUM_INVOCATIONS,1,1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Use shader to draw buffer
@@ -211,16 +212,10 @@ void ClearKeys() {
 
 void SetFractalTransforms(int rotAngle) {
     float fracTrans[16];
-    fracTrans[0] = Cos(rotAngle); fracTrans[4] = Sin(rotAngle); fracTrans[ 8] = 0; fracTrans[12] = .8071;
+    fracTrans[0] = Cos(rotAngle); fracTrans[4] = Sin(rotAngle); fracTrans[ 8] = 0; fracTrans[12] = 0.8071;
     fracTrans[1] =-Sin(rotAngle); fracTrans[5] = Cos(rotAngle); fracTrans[ 9] = 0; fracTrans[13] = 1.8071;
-    fracTrans[2] =     0; fracTrans[6] =     0; fracTrans[10] = 1; fracTrans[14] = 0;
-    fracTrans[3] =     0; fracTrans[7] =     0; fracTrans[11] = 0; fracTrans[15] = 1.45;
-
-    // array([[ 0.7071,  0.7071,  0.    ,  0.7071],
-    //    [-0.7071,  0.7071,  0.    ,  1.7071],
-    //    [ 0.    ,  0.    ,  1.    ,  0.    ],
-    //    [ 0.    ,  0.    ,  0.    ,  2.    ]])
-
+    fracTrans[2] =             0; fracTrans[6] =             0; fracTrans[10] = 1; fracTrans[14] =      0;
+    fracTrans[3] =             0; fracTrans[7] =             0; fracTrans[11] = 0; fracTrans[15] =   1.5;
 
     // Set uniform
     glUseProgram(instanceBranches);
@@ -234,15 +229,6 @@ void handleKey(GLFWwindow* window,int key,int scancode,int action,int mods) {
     bool setTo;
     if (action == GLFW_PRESS) {
         setTo = true;
-
-        if (key == '[') {
-            treeAngle++;
-            SetFractalTransforms(treeAngle);
-        }
-        if (key == ']') {
-            treeAngle--;
-            SetFractalTransforms(treeAngle);
-        }
     }
     else if (action == GLFW_RELEASE) {
         setTo = false;
@@ -275,18 +261,18 @@ void handleUserInputs() {
 
     // Special
     if (la) 
-        th -= 1;
+        th -= 75 * deltaTime;
     if (ra) 
-        th += 1;
+        th += 75 * deltaTime;
     if (ua) 
-        ph -= 1;
+        ph -= 75 * deltaTime;
     if (da) 
-        ph += 1;
+        ph += 75 * deltaTime;
 
     double dir[3];
     double side[3];
     double up[3] = {0,1,0};
-    double speed = .05;
+    double speed = 4 * deltaTime;
     for (int i=0;i<256;i++) {
         if (!keys[i]) continue;
         switch(i) {
@@ -321,6 +307,15 @@ void handleUserInputs() {
                 break;
             case 'C':
                 cam[1] -= speed;
+                break;
+
+            case '[':
+                treeAngle++;
+                SetFractalTransforms(treeAngle);
+                break;
+            case ']':
+                treeAngle--;
+                SetFractalTransforms(treeAngle);
                 break;
             default: break;
         }
@@ -364,7 +359,7 @@ char* ReadText(char *file)
 {
    char* buffer;
    //  Open file
-   FILE* f = fopen(file,"rt");
+   FILE* f = fopen(file,"rb");
    if (!f) Fatal("Cannot open text file %s\n",file);
    //  Seek to end to determine size, then rewind
    fseek(f,0,SEEK_END);
@@ -549,7 +544,10 @@ GLuint CreateSSBO() {
         float transform[16];
     } Instance;
 
-    struct Instance instances[NUM_BRANCHES];
+    unsigned int size = NUM_BRANCHES*sizeof(struct Instance);
+    struct Instance *instances = malloc(size);
+    if (!instances) Fatal("Failed  to malloc %i bytes\n", size);
+    // struct Instance instances[NUM_BRANCHES];
 
     // Create identity for each instance
     float temp[16];
@@ -565,12 +563,13 @@ GLuint CreateSSBO() {
     }
 
     // Fill SSBO with instance data
-    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(instances), instances, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(Instance)*NUM_BRANCHES, instances, GL_STATIC_DRAW);
 
     // Bind SSBO to shader
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
+    free(instances);
     return ssbo;
 }
 
