@@ -9,3 +9,17 @@ Inspired by Prof. Vlakkie's fractal tree example. Methodology inspired by YouTub
 
 Use wasd to move, cursor keys to look around
 Use [ and ] to change angle of branch transformation
+
+# A note for different systems
+
+If your graphics card does not support work group size of 1024, change the "NUM_DOTS" to half and workgroup size in the compute shader to match.
+Additionally, change the number of branches "NUM_BRANCHES" to change the amount of workgroups that are dispatched to optimize for you own gpu.
+
+# TODO
+
+Before the final submission, I want to implement the following:
+
+- Ability to dynamically change number of branches
+- Query for workgroup size for portability
+- Slight sway using an extra sin function in the main fractal transformation
+- Camera panning for screensaver mode
