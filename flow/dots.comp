@@ -99,7 +99,7 @@ void main() {
     psrdnoise(vec3(pos[idx].xy,time/4),vec3(16),100,accel);
 
     // Give every particle a unique velocity so they dont get grouped over time
-    float velModifier = idx * deltaTime / 131072;
+    float velModifier = idx * deltaTime / 1024 / 128;
     float a = accel.x;
     vel[idx] = velModifier * vec2(cos(a*6.28), sin(a*6.28));
     pos[idx].xy += vel[idx];

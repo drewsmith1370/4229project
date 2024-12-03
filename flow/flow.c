@@ -1,7 +1,8 @@
 #include "CSCIx229.h"
 #define PARTICLE_MODE 0
 #define DOT_MODE 1
-#define NUM_DOTS 131072
+#define INVOCATIONS_PER_GROUP 1024
+#define NUM_DOTS 128 * INVOCATIONS_PER_GROUP
 // #define RES 16/9
 
 /*  

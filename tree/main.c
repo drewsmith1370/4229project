@@ -18,7 +18,7 @@ double diffuse=100;
 double specular=100;
 float lightPos[3] = {0};
 // Camera
-double cam[3] = { 0,0,-1 };
+double cam[3] = { -5,0,0 };
 double th=90, ph=0;
 // Time
 double progTime = 0;
@@ -35,7 +35,7 @@ unsigned int lightUniform[2];
 unsigned int fracUniform;
 // Instances
 #define NUM_INVOCATIONS 300
-#define NUM_BRANCHES 1024 * 300
+#define NUM_BRANCHES 1024 * NUM_INVOCATIONS
 float treeAngle = 45;
 
 typedef struct Vertex_t {

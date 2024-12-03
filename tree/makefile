@@ -50,3 +50,8 @@ tree:main.o CSCIx229.a
 #  Clean
 clean:
 	$(CLEAN)
+
+# Run
+run: $(EXE)
+	@cat README
+	./$(EXE)
