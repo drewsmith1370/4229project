@@ -71,9 +71,10 @@ void main() {
         weights[gl_WorkGroupID.x] = sharedWeights[0]; // Store local max weight in global memory
         prevPos[gl_WorkGroupID.x] = pos[maxIdx];     // Store the position corresponding to the max weight
     }
+    barrier();
 
     float n = idx * time;
-    float rand = fract(sin(n * 43758.5453123) * 43758.5453123) * 2;
+    float rand = fract(sin(n * 43758.5453123) * 43758.5453123) * 1.2;
     float rand2 = fract(sin(n * 12.9898) * 43758.5453123);
     int randInt = int(rand * rand2 * float(num));
 

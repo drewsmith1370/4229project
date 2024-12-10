@@ -79,12 +79,13 @@ GLuint loadTextureFromFile(int width, int height) {
    float x = -1;
    float y = -1;
    float val = 0;
-   float radius = 0.4;
+   float radius = 0.1;
    float xd = 0;
    float yd = 0;
 
-   for(int i = 0; i < width; i++)
+   for(int i = 0; i < height; i++)
    {
+      y = -1;
       for(int j = 0; j < width; j++)
       {
          val = 0;
@@ -101,10 +102,12 @@ GLuint loadTextureFromFile(int width, int height) {
          yd = (y-center3y);
          val += exp(-(xd * xd + yd * yd) / (2.0f * radius * radius));
 
-         textureData[i] = val;
-         textureData[i+1] = 0;
-         textureData[i+2] = 0;
-         textureData[i+3] = 0;
+         // if (val > 0.001) printf("food at x=%f y=%f of %.3f\n",x,y,val);
+
+         textureData[i*4*width + j*4    ] = val;
+         textureData[i*4*width + j*4 + 1] = 0;
+         textureData[i*4*width + j*4 + 2] = 0;
+         textureData[i*4*width + j*4 + 3] = 0;
 
          y += dy;
       }
@@ -112,12 +115,12 @@ GLuint loadTextureFromFile(int width, int height) {
    }
 
 
-   //printTexture(textureData,4*width*height);
+   // printTexture(textureData,4*width*height);
 
     // Step 4: Create OpenGL texture
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    GLuint texID;
+    glGenTextures(1, &texID);
+    glBindTexture(GL_TEXTURE_2D, texID);
 
     // Step 5: Upload the texture data to OpenGL
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, textureData);
@@ -133,14 +136,14 @@ GLuint loadTextureFromFile(int width, int height) {
     // Step 7: Free allocated memory
     free(textureData);
 
-    return textureID;
+    return texID;
 }
 
 void initializeTextures() {
 
    for(int i = 0; i < 10; i++)
    {
-    textureIDs[i] = loadTextureFromFile(500, 500);
+    textureIDs[i] = loadTextureFromFile(250, 250);
     if (textureIDs[i] == 0) {
         fprintf(stderr, "Failed to load texture.\n");
     }
@@ -152,6 +155,18 @@ void bindActiveTexture() {
    int id = timecheck % 10;
    glBindTexture(GL_TEXTURE_2D, textureIDs[id]);
    textureID = textureIDs[id];
+}
+
+void DisplayTextureForDebug (GLuint texture) {
+   glUseProgram(0);
+   glEnable(GL_TEXTURE_2D);
+   glBindTexture(GL_TEXTURE_2D,textureID);
+   glBegin(GL_POLYGON);
+   glTexCoord2f(0,0); glVertex2f(-1,-1);
+   glTexCoord2f(0,1); glVertex2f(-1, 1);
+   glTexCoord2f(1,1); glVertex2f( 1, 1);
+   glTexCoord2f(1,0); glVertex2f( 1,-1);
+   glEnd();
 }
 
 /*
@@ -190,7 +205,7 @@ void display() {
    glUniform1f(deltaTimeUniform, deltaTime);
    glBindTextureUnit(1, textureID);
    glUniform1i(texUniformLoc,1);
-   glDispatchCompute(NUM_INVOCATIONS,1,1);
+   glDispatchCompute(1,1,1);//NUM_INVOCATIONS,1,1);
    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
    if (mode == PARTICLE_MODE)
@@ -202,10 +217,11 @@ void display() {
       glDrawArrays(GL_POINTS,0,NUM_DOTS);
    }
    else {
+      DisplayTextureForDebug(textureID);
       glUseProgram(shader[1]);
       glUniform3fv(color1Location, 1, color1);
       glUniform3fv(color2Location, 1, color2);
-      glDrawArrays(GL_POINTS,0,NUM_DOTS);
+      glDrawArrays(GL_POINTS,0,1024);//NUM_DOTS);
    }
    if (showingField) {
       glUseProgram(shader[4]);
@@ -220,27 +236,27 @@ void display() {
    }
 
    // Compute shader to determine dot positions
-   glUseProgram(shader[0]);
-   glUniform1f(timeUniformLocation[0], (float)progTime);
-   glUniform1f(deltaTimeUniform, deltaTime);
-   glDispatchCompute(32,1,1);
-   glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+   // glUseProgram(shader[0]);
+   // glUniform1f(timeUniformLocation[0], (float)progTime);
+   // glUniform1f(deltaTimeUniform, deltaTime);
+   // glDispatchCompute(32,1,1);
+   // glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-   if (mode == PARTICLE_MODE)
-   {
-      // Render program to display dots
-      glUseProgram(shader[3]);
-      //glUniform3fv(color1Location, 1, color1);
-      //glUniform3fv(color2Location, 1, color2);
-      // glBindTexture(GL_TEXTURE_2D, texs[0]);
-      glDrawArrays(GL_POINTS,0,NUM_DOTS);
-   }
-   else {
-      glUseProgram(shader[1]);
-      glUniform3fv(color1Location, 1, color1);
-      glUniform3fv(color2Location, 1, color2);
-      glDrawArrays(GL_POINTS,0,NUM_DOTS);
-   }
+   // if (mode == PARTICLE_MODE)
+   // {
+   //    // Render program to display dots
+   //    glUseProgram(shader[3]);
+   //    //glUniform3fv(color1Location, 1, color1);
+   //    //glUniform3fv(color2Location, 1, color2);
+   //    // glBindTexture(GL_TEXTURE_2D, texs[0]);
+   //    glDrawArrays(GL_POINTS,0,NUM_DOTS);
+   // }
+   // else {
+   //    glUseProgram(shader[1]);
+   //    glUniform3fv(color1Location, 1, color1);
+   //    glUniform3fv(color2Location, 1, color2);
+   //    glDrawArrays(GL_POINTS,0,NUM_DOTS);
+   // }
 
    glUseProgram(0);
    glColor3f(1,1,1);
