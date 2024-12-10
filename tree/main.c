@@ -40,7 +40,7 @@ unsigned int lightUniform[3];
 unsigned int fracUniform;
 unsigned int timeUniform;
 // Instances
-#define NUM_INVOCATIONS 500
+#define NUM_INVOCATIONS 10000
 #define WORK_GROUP_SIZE 1024
 #define NUM_BRANCHES WORK_GROUP_SIZE * NUM_INVOCATIONS
 float treeAngle = 45;
