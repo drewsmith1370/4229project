@@ -1,7 +1,7 @@
 # Top-level Makefile
 
 # List of subdirectories
-SUBDIRS = flow tree
+SUBDIRS = flow turing bacteria tree
 
 # Targets to be built in each subdirectory
 TARGET = all
