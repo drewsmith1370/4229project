@@ -45,5 +45,5 @@ void main() {
     float Id = dot(L,N) / 2 + .5;
     float Is = pow(max(dot(R,V),0),1);
 
-    vs_out.vCol = (.2 + .6 * Id + .2 * Is) * color;
+    vs_out.vCol = (.2 + .5 * Id + .1 * Is) * color;
 }

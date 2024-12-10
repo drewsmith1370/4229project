@@ -22,6 +22,7 @@ double cam[3] = { -5,0,0 };
 double th=90, ph=0;
 // Time
 double progTime = 0;
+double prevTime = 0;
 double deltaTime = 0;
 bool paused = false;
 // Buffers
@@ -37,10 +38,13 @@ unsigned int grassShader;
 unsigned int matrixUniform[4];
 unsigned int lightUniform[3];
 unsigned int fracUniform;
+unsigned int timeUniform;
 // Instances
-#define NUM_INVOCATIONS 300
+#define NUM_INVOCATIONS 500
 #define NUM_BRANCHES 1024 * NUM_INVOCATIONS
 float treeAngle = 45;
+int drawleaves = 1;
+bool spectate = false;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -60,9 +64,9 @@ Vertex_t treeBuffer[] = {
     {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {.5,.8}}, // 4
     {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = { 1,.8}}, // 5
     // Tip
-    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {.5,1}}, // 6
+    {.p = {0,1.3,0},        .n = {0,1,0},           .c = {.6,.2,.1}, .t = {.5,1}}, // 6
     // Leaf
-    {.p = { 0,1.2,0},       .n = {0,0,1},         .c = {0,1,0}, .t = {0,0}}, // 7
+    {.p = { 0,1.2,0},       .n = {0,0,1},           .c = {0,1,0}, .t = {0,0}}, // 7
 };
 
 // IBO Data (Order of vertices to draw tree as polygons)
@@ -98,7 +102,10 @@ void Camera() {
     Project(fov,asp,dim);
     double dir[3];
     LookDirection(ph,th,dir);
-    gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+    if (!spectate)
+        gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+    else
+        gluLookAt(-7*cos(progTime/2),3,7*sin(progTime/2) , 0,1,0 , 0,1,0);
 }
 
 void Plane() {
@@ -127,6 +134,7 @@ void Tree() {
 
     // Use Compute shader
     glUseProgram(instanceBranches);
+    glUniform1f(timeUniform, .005 * sin(progTime*2));
     glDispatchCompute(NUM_INVOCATIONS,1,1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
@@ -148,7 +156,8 @@ void Tree() {
     glUniformMatrix4fv(matrixUniform[3],1,false,projptr);
     glUniform3fv(lightUniform[1],1,lightPos);
     // Draw
-    glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), NUM_BRANCHES);
+    if (drawleaves)
+        glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), NUM_BRANCHES);
     // Stop using shader
     glUseProgram(0);
 
@@ -237,6 +246,10 @@ void handleKey(GLFWwindow* window,int key,int scancode,int action,int mods) {
     bool setTo;
     if (action == GLFW_PRESS) {
         setTo = true;
+
+        if (key == 'M') drawleaves = !drawleaves;
+        if (key == 'P') paused = !paused;
+        if (key == 'Q') spectate = !spectate;
     }
     else if (action == GLFW_RELEASE) {
         setTo = false;
@@ -353,11 +366,15 @@ static void reshape(GLFWwindow* window,int width,int height)
 }
 
 void updateTime() {
-    if (paused) return;
-   // Update time and deltaTime
-   double now = glfwGetTime();
-   deltaTime = now - progTime;
-   progTime = now;
+    // Update time and deltaTime
+    double now = glfwGetTime();
+    deltaTime = now - prevTime;
+
+    if (!paused) {
+        progTime += deltaTime;
+    }
+
+    prevTime = now;
 }
 
 /*
@@ -571,7 +588,7 @@ GLuint CreateSSBO() {
     }
 
     // Fill SSBO with instance data
-    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(Instance)*NUM_BRANCHES, instances, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(Instance)*NUM_BRANCHES, instances, GL_DYNAMIC_DRAW);
 
     // Bind SSBO to shader
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
@@ -605,10 +622,11 @@ void InitializeShadersAndVAO() {
     matrixUniform[1] = glGetUniformLocation(shader,"Projection");
     matrixUniform[2] = glGetUniformLocation(leafShader,"ModelView");
     matrixUniform[3] = glGetUniformLocation(leafShader,"Projection");
-    lightUniform[0] = glGetUniformLocation(shader,"LightPos");
-    lightUniform[1] = glGetUniformLocation(leafShader,"LightPos");
-    lightUniform[2] = glGetUniformLocation(grassShader,"LightPos");
-    fracUniform = glGetUniformLocation(instanceBranches,"FractalTransform");
+    lightUniform[0]  = glGetUniformLocation(shader,"LightPos");
+    lightUniform[1]  = glGetUniformLocation(leafShader,"LightPos");
+    lightUniform[2]  = glGetUniformLocation(grassShader,"LightPos");
+    fracUniform      = glGetUniformLocation(instanceBranches,"FractalTransform");
+    timeUniform      = glGetUniformLocation(instanceBranches,"time");
 
     // Get locations of attributes in shader
     int posLoc = glGetAttribLocation(shader,"position");
@@ -636,6 +654,8 @@ int main(int argc, char** argv) {
         fprintf(stderr,"Cannot Initialize GLFW");
         exit(1);
     }
+
+    if (argc > 1 && argv[1][0] == 'i') spectate = true;
 
     glfwWindowHint(GLFW_RESIZABLE,GLFW_TRUE);
     window = glfwCreateWindow(600,600,"Drew Smith, Ethan Coleman",NULL,NULL);
