@@ -26,12 +26,16 @@ double deltaTime = 0;
 bool paused = false;
 // Buffers
 unsigned int treeVao;
+// Textures
+unsigned int grassTex;
+unsigned int treeTex;
 // Shaders
 unsigned int instanceBranches;
 unsigned int shader;
 unsigned int leafShader;
+unsigned int grassShader;
 unsigned int matrixUniform[4];
-unsigned int lightUniform[2];
+unsigned int lightUniform[3];
 unsigned int fracUniform;
 // Instances
 #define NUM_INVOCATIONS 300
@@ -48,15 +52,15 @@ typedef struct Vertex_t {
 // VBO Data (Position, normal, color, and texture associated with each vertex)
 Vertex_t treeBuffer[] = {
     // Base triangle
-    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 0
-    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 1
-    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 2
+    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = { 0,0}}, // 0
+    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {.5,0}}, // 1
+    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = { 1,0}}, // 2
     // Top triangle
-    {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 3
-    {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 4
-    {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 5
+    {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = { 0,.8}}, // 3
+    {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {.5,.8}}, // 4
+    {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = { 1,.8}}, // 5
     // Tip
-    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {0,0}}, // 6
+    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {.5,1}}, // 6
     // Leaf
     {.p = { 0,1.2,0},       .n = {0,0,1},         .c = {0,1,0}, .t = {0,0}}, // 7
 };
@@ -98,22 +102,26 @@ void Camera() {
 }
 
 void Plane() {
-    glColor3f(0,.8,0);
+    glUseProgram(grassShader);
+    glBindTexture(GL_TEXTURE_2D,grassTex);
+    // glColor3f(0,.8,0);
+    glColor3f(1,1,1);
     glNormal3f(0,1,0);
     glBegin(GL_TRIANGLES);
-    glVertex3f(-5,-1,-5);
-    glVertex3f(-5,-1, 5);
-    glVertex3f( 5,-1,-5);
+    glTexCoord2f(0,0); glVertex3f(-10,-1,-10);
+    glTexCoord2f(0,1); glVertex3f(-10,-1, 10);
+    glTexCoord2f(1,0); glVertex3f( 10,-1,-10);
 
-    glVertex3f( 5,-1,-5);
-    glVertex3f(-5,-1, 5);
-    glVertex3f( 5,-1, 5);
+    glTexCoord2f(1,0); glVertex3f( 10,-1,-10);
+    glTexCoord2f(0,1); glVertex3f(-10,-1, 10);
+    glTexCoord2f(1,1); glVertex3f( 10,-1, 10);
     glEnd();
 }
 
 void Tree() {
     // Fetch Modelview matrix (In future I might make my own matrix stack)
     GLfloat mvptr[16], projptr[16];
+    glBindTexture(GL_TEXTURE_2D,treeTex);
     glGetFloatv(GL_MODELVIEW_MATRIX,mvptr);
     glGetFloatv(GL_PROJECTION_MATRIX,projptr);
 
@@ -583,11 +591,15 @@ void InitializeShadersAndVAO() {
     treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
     CreateSSBO();
     
+    // Texture
+    grassTex = LoadTexBMP("grass.bmp");
+    treeTex = LoadTexBMP("tree.bmp");
 
     // Make shader programs
     instanceBranches = CreateComputeProg("branches.comp");
     shader = CreateShaderProg("tree.vert","tree.frag");
     leafShader = CreateGeomProg("leaf.vert","leaf.geom","leaf.frag");
+    grassShader = CreateShaderProg("grass.vert","grass.frag");
     // Find uniforms
     matrixUniform[0] = glGetUniformLocation(shader,"ModelView");
     matrixUniform[1] = glGetUniformLocation(shader,"Projection");
@@ -595,25 +607,26 @@ void InitializeShadersAndVAO() {
     matrixUniform[3] = glGetUniformLocation(leafShader,"Projection");
     lightUniform[0] = glGetUniformLocation(shader,"LightPos");
     lightUniform[1] = glGetUniformLocation(leafShader,"LightPos");
+    lightUniform[2] = glGetUniformLocation(grassShader,"LightPos");
     fracUniform = glGetUniformLocation(instanceBranches,"FractalTransform");
 
     // Get locations of attributes in shader
     int posLoc = glGetAttribLocation(shader,"position");
     int nrmLoc = glGetAttribLocation(shader,"normal");
     int colLoc = glGetAttribLocation(shader,"color");
-    // int texLoc = glGetAttribLocation(shader,"texture");
+    int texLoc = glGetAttribLocation(shader,"texture");
 
     // Enable VAOs
     glEnableVertexAttribArray(posLoc);
     glEnableVertexAttribArray(nrmLoc);
     glEnableVertexAttribArray(colLoc);
-    // glEnableVertexAttribArray(texLoc);
+    glEnableVertexAttribArray(texLoc);
 
     // Set vertex attribute pointers
     glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
     glVertexAttribPointer(nrmLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
     glVertexAttribPointer(colLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
-    // glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
+    glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
 
     return;
 }
@@ -642,6 +655,8 @@ int main(int argc, char** argv) {
     glfwSetErrorCallback(errorCallback);
     glfwSetFramebufferSizeCallback(window,reshape);
     glfwSetKeyCallback(window,handleKey);
+
+    glEnable(GL_TEXTURE_2D);
 
     // Init shaders
     InitializeShadersAndVAO();

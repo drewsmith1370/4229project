@@ -1,6 +1,7 @@
 #version 430 core
 
 uniform vec3 Intensity;
+uniform sampler2D tex;
 
 in vec3 vPos;
 in vec3 vNrm;
@@ -19,5 +20,5 @@ void main() {
     float Id = dot(L,N) / 2 + .5;
     float Is = pow(max(dot(R,V),0),1);
 
-    FragColor = (.2 + .6 * Id + .2 * Is) * vec4(vCol,1);
+    FragColor = (.2 + .6 * Id + .2 * Is) * vec4(vCol,1) * texture(tex,vTex);
 }
