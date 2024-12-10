@@ -1,20 +1,22 @@
 #include "CSCIx229.h"
+#include <stddef.h>
 #define PARTICLE_MODE 0
 #define DOT_MODE 1
 #define INVOCATIONS_PER_GROUP 1024
-#define NUM_DOTS 128 * INVOCATIONS_PER_GROUP
-// #define RES 16/9
+#define NUM_WORKGROUPS 1000
+#define NUM_DOTS NUM_WORKGROUPS * INVOCATIONS_PER_GROUP
 
 /*  
  *  Buffer layout (all floats):
  *  dotPositions  (vec4) | velocities  (vec2) | prevPositions (vec4)
  *  [x y z w] * NUM_DOTS | [ux uy] * NUM_DOTS | [x y z w] * NUM_DOTS
  */
-typedef struct DotBuffer_t {
-   float dotPositions  [4 * NUM_DOTS];
-   float velocities    [2 * NUM_DOTS];
-   float prevPositions [4 * NUM_DOTS];
-} DotBuffer_t;
+typedef struct Dot_t {
+   float dotPosition  [4];
+   float velocity     [2];
+   float prevPosition [2];
+   float prev2        [2];
+} Dot_t;
 
 /*
  *  State Variables
@@ -55,7 +57,7 @@ void display() {
    glUseProgram(shader[0]);
    glUniform1f(timeUniformLocation[0], (float)progTime);
    glUniform1f(deltaTimeUniform, deltaTime);
-   glDispatchCompute(128,1,1);
+   glDispatchCompute(NUM_WORKGROUPS,1,1);
    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
    if (mode == PARTICLE_MODE)
@@ -68,6 +70,7 @@ void display() {
       glUseProgram(shader[1]);
       glDrawArrays(GL_POINTS,0,NUM_DOTS);
    }
+
    if (showingField) {
       // Draw noise program on a quad
       glUseProgram(shader[2]);
@@ -88,7 +91,7 @@ void display() {
    glUseProgram(shader[0]);
    glUniform1f(timeUniformLocation[0], (float)progTime);
    glUniform1f(deltaTimeUniform, deltaTime);
-   glDispatchCompute(32,1,1);
+   glDispatchCompute(NUM_WORKGROUPS,1,1);
    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
    if (mode == PARTICLE_MODE)
@@ -350,6 +353,7 @@ int main(int argc, char** argv) {
    // Initialize keys to false
    for (int i=0;i<256;i++) keys[i] = 0;
 
+
    glutInit(&argc,argv);
    glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
    glutInitWindowSize(420,380);
@@ -388,23 +392,24 @@ int main(int argc, char** argv) {
    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 
    // Create initial buffer data
-   DotBuffer_t* initialBuffer = malloc(sizeof(DotBuffer_t));
+   Dot_t* initialBuffer = malloc(sizeof(Dot_t)*NUM_DOTS);
    float rx, ry;
-   for (int i=0;i<NUM_DOTS*4;i+=4) {
+   for (int i=0;i<NUM_DOTS;i++) {
       rx = (float)rand() / (float)RAND_MAX * 2 - 1;
       ry = (float)rand() / (float)RAND_MAX * 2 - 1;
-      initialBuffer->dotPositions[i  ] = rx;
-      initialBuffer->dotPositions[i+1] = ry;
-      initialBuffer->dotPositions[i+2] = 0;
-      initialBuffer->dotPositions[i+3] = 1;
+      initialBuffer[i].dotPosition[0] = rx;
+      initialBuffer[i].dotPosition[1] = ry;
+      initialBuffer[i].dotPosition[2] = 0;
+      initialBuffer[i].dotPosition[3] = 1;
 
-      initialBuffer->prevPositions[i  ] = rx;
-      initialBuffer->prevPositions[i+1] = ry;
-      initialBuffer->prevPositions[i+2] = 0;
-      initialBuffer->prevPositions[i+3] = 1;
+      initialBuffer[i].velocity[0] = 0;
+      initialBuffer[i].velocity[1] = 0;
+
+      initialBuffer[i].prevPosition[0] = rx;
+      initialBuffer[i].prevPosition[1] = ry;
    }
    // Generate buffer with data
-   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DotBuffer_t), initialBuffer, GL_STATIC_DRAW);
+   glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Dot_t)*NUM_DOTS, initialBuffer, GL_DYNAMIC_DRAW);
    // Bind buffer to 0 index
    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
    free(initialBuffer);
@@ -415,8 +420,9 @@ int main(int argc, char** argv) {
    deltaTimeUniform = glGetUniformLocation(shader[0],"deltaTime");
 
    // Bind SSBO to vertex attribute so vertices can be drawn
-   // glVertexAttribPointer(0, 4 * NUM_DOTS, GL_FLOAT, GL_FALSE, 0, NULL);
    glEnableVertexAttribArray(0);
+   glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(Dot_t), (void*)offsetof(Dot_t,dotPosition));
+   glBindVertexArray(0);
    
    //  Pass control to GLUT so it can interact with the user
    ErrCheck("init");

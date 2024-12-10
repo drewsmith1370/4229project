@@ -22,21 +22,31 @@ double cam[3] = { -5,0,0 };
 double th=90, ph=0;
 // Time
 double progTime = 0;
+double prevTime = 0;
 double deltaTime = 0;
 bool paused = false;
 // Buffers
 unsigned int treeVao;
+// Textures
+unsigned int grassTex;
+unsigned int treeTex;
 // Shaders
 unsigned int instanceBranches;
 unsigned int shader;
 unsigned int leafShader;
+unsigned int grassShader;
 unsigned int matrixUniform[4];
-unsigned int lightUniform[2];
+unsigned int lightUniform[3];
 unsigned int fracUniform;
+unsigned int timeUniform;
 // Instances
-#define NUM_INVOCATIONS 300
-#define NUM_BRANCHES 1024 * NUM_INVOCATIONS
+#define NUM_INVOCATIONS 10000
+#define WORK_GROUP_SIZE 1024
+#define NUM_BRANCHES WORK_GROUP_SIZE * NUM_INVOCATIONS
 float treeAngle = 45;
+int drawleaves = 1;
+bool spectate = false;
+int nInvocations = 500;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -48,17 +58,17 @@ typedef struct Vertex_t {
 // VBO Data (Position, normal, color, and texture associated with each vertex)
 Vertex_t treeBuffer[] = {
     // Base triangle
-    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 0
-    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 1
-    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 2
+    {.p = {-.167,-1.1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = { 0,0}}, // 0
+    {.p = {-.033,-1.1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {.5,0}}, // 1
+    {.p = { .233,-1.1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = { 1,0}}, // 2
     // Top triangle
-    {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = {0,0}}, // 3
-    {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {0,0}}, // 4
-    {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = {0,0}}, // 5
+    {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = { 0,.8}}, // 3
+    {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {.5,.8}}, // 4
+    {.p = { .233, 1,-.033}, .n = { .233,.05,-.033}, .c = {.6,.2,.1}, .t = { 1,.8}}, // 5
     // Tip
-    {.p = {0,1.3,0},        .n = {0,1,0},          .c = {.6,.2,.1}, .t = {0,0}}, // 6
+    {.p = {0,1.3,0},        .n = {0,1,0},           .c = {.6,.2,.1}, .t = {.5,1}}, // 6
     // Leaf
-    {.p = { 0,1.2,0},       .n = {0,0,1},         .c = {0,1,0}, .t = {0,0}}, // 7
+    {.p = { 0,1.2,0},       .n = {0,0,1},           .c = {0,1,0}, .t = {0,0}}, // 7
 };
 
 // IBO Data (Order of vertices to draw tree as polygons)
@@ -94,32 +104,40 @@ void Camera() {
     Project(fov,asp,dim);
     double dir[3];
     LookDirection(ph,th,dir);
-    gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+    if (!spectate)
+        gluLookAt(cam[0],cam[1],cam[2] , cam[0]+dir[0],cam[1]+dir[1],cam[2]+dir[2] , 0,1,0);
+    else
+        gluLookAt(-7*cos(progTime/2),3,7*sin(progTime/2) , 0,1,0 , 0,1,0);
 }
 
 void Plane() {
-    glColor3f(0,.8,0);
+    glUseProgram(grassShader);
+    glBindTexture(GL_TEXTURE_2D,grassTex);
+    // glColor3f(0,.8,0);
+    glColor3f(1,1,1);
     glNormal3f(0,1,0);
     glBegin(GL_TRIANGLES);
-    glVertex3f(-5,-1,-5);
-    glVertex3f(-5,-1, 5);
-    glVertex3f( 5,-1,-5);
+    glTexCoord2f(0,0); glVertex3f(-10,-1,-10);
+    glTexCoord2f(0,1); glVertex3f(-10,-1, 10);
+    glTexCoord2f(1,0); glVertex3f( 10,-1,-10);
 
-    glVertex3f( 5,-1,-5);
-    glVertex3f(-5,-1, 5);
-    glVertex3f( 5,-1, 5);
+    glTexCoord2f(1,0); glVertex3f( 10,-1,-10);
+    glTexCoord2f(0,1); glVertex3f(-10,-1, 10);
+    glTexCoord2f(1,1); glVertex3f( 10,-1, 10);
     glEnd();
 }
 
 void Tree() {
     // Fetch Modelview matrix (In future I might make my own matrix stack)
     GLfloat mvptr[16], projptr[16];
+    glBindTexture(GL_TEXTURE_2D,treeTex);
     glGetFloatv(GL_MODELVIEW_MATRIX,mvptr);
     glGetFloatv(GL_PROJECTION_MATRIX,projptr);
 
     // Use Compute shader
     glUseProgram(instanceBranches);
-    glDispatchCompute(NUM_INVOCATIONS,1,1);
+    glUniform1f(timeUniform, .005 * sin(progTime*2));
+    glDispatchCompute(nInvocations,1,1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Use shader to draw buffer
@@ -131,7 +149,7 @@ void Tree() {
     // Bind vao
     glBindVertexArray(treeVao);
     // Draw
-    glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, NUM_BRANCHES);
+    glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, nInvocations * WORK_GROUP_SIZE);
 
     // Leaves
     glUseProgram(leafShader);
@@ -140,7 +158,8 @@ void Tree() {
     glUniformMatrix4fv(matrixUniform[3],1,false,projptr);
     glUniform3fv(lightUniform[1],1,lightPos);
     // Draw
-    glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), NUM_BRANCHES);
+    if (drawleaves)
+        glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), nInvocations * WORK_GROUP_SIZE);
     // Stop using shader
     glUseProgram(0);
 
@@ -229,6 +248,10 @@ void handleKey(GLFWwindow* window,int key,int scancode,int action,int mods) {
     bool setTo;
     if (action == GLFW_PRESS) {
         setTo = true;
+
+        if (key == 'M') drawleaves = !drawleaves;
+        if (key == 'P') paused = !paused;
+        if (key == 'Q') spectate = !spectate;
     }
     else if (action == GLFW_RELEASE) {
         setTo = false;
@@ -317,6 +340,18 @@ void handleUserInputs() {
                 treeAngle--;
                 SetFractalTransforms(treeAngle);
                 break;
+
+            case '-':
+                nInvocations--;
+                if (nInvocations < 1) nInvocations = 1;
+                break;
+
+            case '=':
+                nInvocations++;
+                if (nInvocations > NUM_INVOCATIONS) 
+                    nInvocations = NUM_INVOCATIONS;
+                break;
+
             default: break;
         }
     }
@@ -345,11 +380,15 @@ static void reshape(GLFWwindow* window,int width,int height)
 }
 
 void updateTime() {
-    if (paused) return;
-   // Update time and deltaTime
-   double now = glfwGetTime();
-   deltaTime = now - progTime;
-   progTime = now;
+    // Update time and deltaTime
+    double now = glfwGetTime();
+    deltaTime = now - prevTime;
+
+    if (!paused) {
+        progTime += deltaTime;
+    }
+
+    prevTime = now;
 }
 
 /*
@@ -563,7 +602,7 @@ GLuint CreateSSBO() {
     }
 
     // Fill SSBO with instance data
-    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(Instance)*NUM_BRANCHES, instances, GL_STATIC_DRAW);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,  sizeof(Instance)*NUM_BRANCHES, instances, GL_DYNAMIC_DRAW);
 
     // Bind SSBO to shader
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, ssbo);
@@ -583,37 +622,43 @@ void InitializeShadersAndVAO() {
     treeVao = CreateStaticVertexBuffer(vbosize,treeBuffer , ibosize,treeIdxBuffer);
     CreateSSBO();
     
+    // Texture
+    grassTex = LoadTexBMP("grass.bmp");
+    treeTex = LoadTexBMP("tree.bmp");
 
     // Make shader programs
     instanceBranches = CreateComputeProg("branches.comp");
     shader = CreateShaderProg("tree.vert","tree.frag");
     leafShader = CreateGeomProg("leaf.vert","leaf.geom","leaf.frag");
+    grassShader = CreateShaderProg("grass.vert","grass.frag");
     // Find uniforms
     matrixUniform[0] = glGetUniformLocation(shader,"ModelView");
     matrixUniform[1] = glGetUniformLocation(shader,"Projection");
     matrixUniform[2] = glGetUniformLocation(leafShader,"ModelView");
     matrixUniform[3] = glGetUniformLocation(leafShader,"Projection");
-    lightUniform[0] = glGetUniformLocation(shader,"LightPos");
-    lightUniform[1] = glGetUniformLocation(leafShader,"LightPos");
-    fracUniform = glGetUniformLocation(instanceBranches,"FractalTransform");
+    lightUniform[0]  = glGetUniformLocation(shader,"LightPos");
+    lightUniform[1]  = glGetUniformLocation(leafShader,"LightPos");
+    lightUniform[2]  = glGetUniformLocation(grassShader,"LightPos");
+    fracUniform      = glGetUniformLocation(instanceBranches,"FractalTransform");
+    timeUniform      = glGetUniformLocation(instanceBranches,"time");
 
     // Get locations of attributes in shader
     int posLoc = glGetAttribLocation(shader,"position");
     int nrmLoc = glGetAttribLocation(shader,"normal");
     int colLoc = glGetAttribLocation(shader,"color");
-    // int texLoc = glGetAttribLocation(shader,"texture");
+    int texLoc = glGetAttribLocation(shader,"texture");
 
     // Enable VAOs
     glEnableVertexAttribArray(posLoc);
     glEnableVertexAttribArray(nrmLoc);
     glEnableVertexAttribArray(colLoc);
-    // glEnableVertexAttribArray(texLoc);
+    glEnableVertexAttribArray(texLoc);
 
     // Set vertex attribute pointers
     glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,p));
     glVertexAttribPointer(nrmLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,n));
     glVertexAttribPointer(colLoc, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,c));
-    // glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
+    glVertexAttribPointer(texLoc, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex_t), (void*)offsetof(Vertex_t,t));
 
     return;
 }
@@ -623,6 +668,8 @@ int main(int argc, char** argv) {
         fprintf(stderr,"Cannot Initialize GLFW");
         exit(1);
     }
+
+    if (argc > 1 && argv[1][0] == 'i') spectate = true;
 
     glfwWindowHint(GLFW_RESIZABLE,GLFW_TRUE);
     window = glfwCreateWindow(600,600,"Drew Smith, Ethan Coleman",NULL,NULL);
@@ -642,6 +689,8 @@ int main(int argc, char** argv) {
     glfwSetErrorCallback(errorCallback);
     glfwSetFramebufferSizeCallback(window,reshape);
     glfwSetKeyCallback(window,handleKey);
+
+    glEnable(GL_TEXTURE_2D);
 
     // Init shaders
     InitializeShadersAndVAO();

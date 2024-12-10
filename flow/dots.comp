@@ -2,14 +2,26 @@
 
 // Need to rewrite for GL_MAX_WORKGROUP_INVOCATIONS
 layout (local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+struct dot_t {
+    vec4 pos;
+    vec2 vel;
+    vec2 prev;
+    vec2 prev2;
+};
+
 layout (std430, binding = 0) buffer dot_buffer {
-    vec4 pos     [131072];
-    vec2 vel     [131072];
-    vec4 prevPos [131072];
+    dot_t dots[];
 };
 
 uniform float time;
 uniform float deltaTime;
+
+// Some hash function I keep seeing in shaders. Not sure who to credit for this but it's not mine
+// Takes two variables and returns a random value between 0 and 1
+float rand(vec2 co){
+  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
 
 // psrdnoise3.glsl, version 2021-12-02
 // Copyright (c) 2021 Stefan Gustavson and Ian McEwan
@@ -94,14 +106,33 @@ float psrdnoise(vec3 x, vec3 period, float alpha, out vec3 gradient)
 
 void main() {
     uint idx = gl_GlobalInvocationID.x;
-    prevPos[idx] = pos[idx];
+    dot_t dot = dots[idx];
+    dots[idx].prev2= dot.prev.xy;
+    dots[idx].prev = dot.pos.xy;
     vec3 accel = vec3(1);
-    psrdnoise(vec3(pos[idx].xy,time/4),vec3(16),100,accel);
+    psrdnoise(vec3(dot.pos.xy,time/4),vec3(16),100,accel);
+
 
     // Give every particle a unique velocity so they dont get grouped over time
-    float velModifier = idx * deltaTime / 1024 / 128;
+    float velModifier = (idx % 16 + 4) * deltaTime / 100;
     float a = accel.x;
-    vel[idx] = velModifier * vec2(cos(a*6.28), sin(a*6.28));
-    pos[idx].xy += vel[idx];
-    pos[idx].xy = fract(pos[idx].xy) + -1 * int(pos[idx].xy);
+
+    // Use direction to add velocity
+    vec2 v = dot.vel + velModifier * vec2(cos(a*3.14), sin(a*3.14));
+    // Normalize to max velocity
+    float squaremag = v.x*v.x + v.y*v.y;
+    if (squaremag > velModifier*velModifier) v = v / sqrt(squaremag) * velModifier;
+
+    // add brownian motion, credit to Ethan's turing screensaver
+    a = rand(vec2(time,float(idx)));
+    v += .0001 * vec2(cos(a), sin(a));
+    // v = vec2(.001,.001);
+
+    // Update velocity
+    dots[idx].vel = v;
+    // Update position
+    vec2 p = dot.pos.xy + v;
+    // If dot hits edge, move it to opposite edge
+    p = fract(p) + -1 * int(p);
+    dots[idx].pos.xy = p;
 }
