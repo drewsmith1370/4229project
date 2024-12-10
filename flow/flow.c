@@ -353,6 +353,7 @@ int main(int argc, char** argv) {
    // Initialize keys to false
    for (int i=0;i<256;i++) keys[i] = 0;
 
+
    glutInit(&argc,argv);
    glutInitDisplayMode(GLUT_RGB | GLUT_DEPTH | GLUT_DOUBLE);
    glutInitWindowSize(420,380);

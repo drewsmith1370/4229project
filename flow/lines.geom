@@ -6,7 +6,7 @@ const vec3 brCol = vec3(1,0,1);
 const vec3 blCol = vec3(1,0,0);
 
 layout(points) in;
-layout(line_strip, max_vertices = 2) out;
+layout(line_strip, max_vertices = 3) out;
 
 in VS_OUT {
     vec2 prevPos;
@@ -34,7 +34,7 @@ void main() {
     vec4 fragCol = vec4(interp, 1);
 
     // Current
-    gl_Position = pos;
+    gl_Position = vec4(pos.xy,1,1);
     gFragColor = fragCol;
  // uv = vec2(x,y);
     EmitVertex();
