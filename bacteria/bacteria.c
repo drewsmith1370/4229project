@@ -2,7 +2,7 @@
 #define PARTICLE_MODE 0
 #define DOT_MODE 1
 #define SIZE_WORKGROUP 1024
-#define NUM_INVOCATIONS 128
+#define NUM_INVOCATIONS 1
 #define NUM_DOTS SIZE_WORKGROUP*NUM_INVOCATIONS
 // #define RES 16/9
 
@@ -15,6 +15,7 @@ typedef struct DotBuffer_t {
    float dotPositions  [4 * NUM_DOTS];
    float velocities    [2 * NUM_DOTS];
    float prevPositions [4 * NUM_DOTS];
+   float weights       [NUM_DOTS];
 } DotBuffer_t;
 
 /*
@@ -152,7 +153,7 @@ void initializeTextures() {
 
 // Function to switch between textures
 void bindActiveTexture() {
-   int id = timecheck % 10;
+   int id = timecheck % 100;
    glBindTexture(GL_TEXTURE_2D, textureIDs[id]);
    textureID = textureIDs[id];
 }
@@ -205,7 +206,7 @@ void display() {
    glUniform1f(deltaTimeUniform, deltaTime);
    glBindTextureUnit(1, textureID);
    glUniform1i(texUniformLoc,1);
-   glDispatchCompute(1,1,1);//NUM_INVOCATIONS,1,1);
+   glDispatchCompute(NUM_INVOCATIONS  ,1,1);//NUM_INVOCATIONS,1,1);
    glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
    if (mode == PARTICLE_MODE)
@@ -221,7 +222,7 @@ void display() {
       glUseProgram(shader[1]);
       glUniform3fv(color1Location, 1, color1);
       glUniform3fv(color2Location, 1, color2);
-      glDrawArrays(GL_POINTS,0,1024);//NUM_DOTS);
+      glDrawArrays(GL_POINTS,0,NUM_DOTS);
    }
    if (showingField) {
       glUseProgram(shader[4]);
@@ -570,6 +571,13 @@ int main(int argc, char** argv) {
    glGenBuffers(1, &ssbo);
    glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 
+//    typedef struct DotBuffer_t {
+   //    float dotPositions  [4 * NUM_DOTS];
+   //    float velocities    [2 * NUM_DOTS];
+   //    float prevPositions [4 * NUM_DOTS];
+   //    float weights       [NUM_DOTS];
+//    } DotBuffer_t;
+
    // Create initial buffer data
    DotBuffer_t* initialBuffer = malloc(sizeof(DotBuffer_t));
    float rx, ry;
@@ -577,8 +585,8 @@ int main(int argc, char** argv) {
       rx = (float)rand() / (float)RAND_MAX * 2 - 1;
       ry = (float)rand() / (float)RAND_MAX * 2 - 1;
       
-      initialBuffer->dotPositions[i  ] = rx;
-      initialBuffer->dotPositions[i+1] = ry;
+      initialBuffer->dotPositions[i  ] = 0.5;//rx;
+      initialBuffer->dotPositions[i+1] = 0.5;//ry;
       initialBuffer->dotPositions[i+2] = 0;
       initialBuffer->dotPositions[i+3] = 1;
 
@@ -586,6 +594,8 @@ int main(int argc, char** argv) {
       initialBuffer->prevPositions[i+1] = ry;
       initialBuffer->prevPositions[i+2] = 0;
       initialBuffer->prevPositions[i+3] = 1;
+
+      initialBuffer->weights[i/4] = 0;
    }
 
    // Generate buffer with data
