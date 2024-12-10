@@ -41,10 +41,12 @@ unsigned int fracUniform;
 unsigned int timeUniform;
 // Instances
 #define NUM_INVOCATIONS 500
-#define NUM_BRANCHES 1024 * NUM_INVOCATIONS
+#define WORK_GROUP_SIZE 1024
+#define NUM_BRANCHES WORK_GROUP_SIZE * NUM_INVOCATIONS
 float treeAngle = 45;
 int drawleaves = 1;
 bool spectate = false;
+int nInvocations = 500;
 
 typedef struct Vertex_t {
     float p [3]; // pos
@@ -56,9 +58,9 @@ typedef struct Vertex_t {
 // VBO Data (Position, normal, color, and texture associated with each vertex)
 Vertex_t treeBuffer[] = {
     // Base triangle
-    {.p = {-.167,-1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = { 0,0}}, // 0
-    {.p = {-.033,-1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {.5,0}}, // 1
-    {.p = { .233,-1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = { 1,0}}, // 2
+    {.p = {-.167,-1.1,-.167}, .n = {-.167, 0,-.167}, .c = {.6,.2,.1}, .t = { 0,0}}, // 0
+    {.p = {-.033,-1.1, .233}, .n = {-.033, 0, .233}, .c = {.6,.2,.1}, .t = {.5,0}}, // 1
+    {.p = { .233,-1.1,-.033}, .n = { .233, 0,-.033}, .c = {.6,.2,.1}, .t = { 1,0}}, // 2
     // Top triangle
     {.p = {-.167, 1,-.167}, .n = {-.167,.05,-.167}, .c = {.6,.2,.1}, .t = { 0,.8}}, // 3
     {.p = {-.033, 1, .233}, .n = {-.033,.05, .233}, .c = {.6,.2,.1}, .t = {.5,.8}}, // 4
@@ -135,7 +137,7 @@ void Tree() {
     // Use Compute shader
     glUseProgram(instanceBranches);
     glUniform1f(timeUniform, .005 * sin(progTime*2));
-    glDispatchCompute(NUM_INVOCATIONS,1,1);
+    glDispatchCompute(nInvocations,1,1);
     glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
     // Use shader to draw buffer
@@ -147,7 +149,7 @@ void Tree() {
     // Bind vao
     glBindVertexArray(treeVao);
     // Draw
-    glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, NUM_BRANCHES);
+    glDrawElementsInstanced(GL_TRIANGLES, 30, GL_UNSIGNED_INT, 0, nInvocations * WORK_GROUP_SIZE);
 
     // Leaves
     glUseProgram(leafShader);
@@ -157,7 +159,7 @@ void Tree() {
     glUniform3fv(lightUniform[1],1,lightPos);
     // Draw
     if (drawleaves)
-        glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), NUM_BRANCHES);
+        glDrawElementsInstanced(GL_POINTS, 1, GL_UNSIGNED_INT, (void*)sizeof(float[30]), nInvocations * WORK_GROUP_SIZE);
     // Stop using shader
     glUseProgram(0);
 
@@ -338,6 +340,18 @@ void handleUserInputs() {
                 treeAngle--;
                 SetFractalTransforms(treeAngle);
                 break;
+
+            case '-':
+                nInvocations--;
+                if (nInvocations < 1) nInvocations = 1;
+                break;
+
+            case '=':
+                nInvocations++;
+                if (nInvocations > NUM_INVOCATIONS) 
+                    nInvocations = NUM_INVOCATIONS;
+                break;
+
             default: break;
         }
     }
