@@ -1,23 +1,14 @@
-## This is a cool project
+# Perlin noise flowfield
 
 CSCI 4229
 Made by Drew Smith. Visualize Perlin noise flow fields.
 
-## Instructions
+# Instructions
 
 Press 'm' to swap point rendering
 Press 'n' to display noise map
 
-# A note for different systems
+## A note for different systems
 
 If your graphics card does not support work group size of 1024, change the "INVOCATIONS_PER_GROUP" and workgroup size in the compute shader to match.
 Additionally, change the number of branches "NUM_DOTS" to change the amount of workgroups that are dispatched to optimize for your own gpu.
-
-# TODO
-
-Before the final submission, I want to implement the following:
-
-- Ability to dynamically change number of branches
-- Query for workgroup size for portability
-- Uniform for period (changes how many channels will form per loop)
-- Longer lines by using more previous points
