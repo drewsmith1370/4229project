@@ -1,25 +1,19 @@
-## Fractal Tree CSCI4229 Screensaver Project
+# Fractal Tree CSCI4229 Screensaver Project
 
 CSCI 4229
 Made by Drew Smith.
 Demonstrates a faster method for drawing fractal trees. By instancing a VAO with various transformations, fuller and faster trees can be drawn, with each branch generated in parallel.
 Inspired by Prof. Vlakkie's fractal tree example. Methodology inspired by YouTuber Acerola's fractal transformations video.
 
-## Instructions
+# Instructions
 
 Use wasd to move, cursor keys to look around
 Use [ and ] to change angle of branch transformation
+Use - and = to decrease/increase amount of work group invocations
+Press q to enter spectator mode
+Press m to toggle leaves
 
-# A note for different systems
+## A note for different systems
 
 If your graphics card does not support work group size of 1024, change the "NUM_DOTS" to half and workgroup size in the compute shader to match.
 Additionally, change the number of branches "NUM_BRANCHES" to change the amount of workgroups that are dispatched to optimize for you own gpu.
-
-# TODO
-
-Before the final submission, I want to implement the following:
-
-- Ability to dynamically change number of branches
-- Query for workgroup size for portability
-- Slight sway using an extra sin function in the main fractal transformation
-- Camera panning for screensaver mode
