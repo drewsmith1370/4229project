@@ -1,0 +1,14 @@
+## This is a cool project
+
+CSCI 4229
+Made by Ethan Coleman. Visualize slime mould.
+
+## Description
+This was inspired by my research on bacterial motion and communication.
+While I did not use my actual research model to create this screensaver, 
+I thought that a slime-mould algorithm captures some of the ideas we see in 
+that work and I though it would be fun to code up. Food is pulsed in at random locations
+and particles sense how much food exists at their location, they then communicate this
+to the group and the other particles will swarm the food source. A random number 
+generator is used to determine whether a particle will exhibit this behavior, or simply
+swarm in a random direction and "explore" for more food.

@@ -35,7 +35,7 @@ unsigned int lightUniform[2];
 unsigned int fracUniform;
 // Instances
 #define NUM_INVOCATIONS 300
-#define NUM_BRANCHES 1024 * 300
+#define NUM_BRANCHES 1024 * NUM_INVOCATIONS
 float treeAngle = 45;
 
 typedef struct Vertex_t {

@@ -1,0 +1,94 @@
+#version 430 core
+
+    /*
+    This implementation of the slime-mould algorithm is largely based on
+    pseudo-code found on the website:
+    https://www.baeldung.com/cs/slime-mould-algorithm#:~:text=The%20Slime%
+    20Mould%20Algorithm%20%28SMA%29%20mimics%20the%20problem-solving,combin
+    es%20competition%20and%20cooperation%20to%20form%20optimal%20networks.
+    */
+
+// Need to rewrite for GL_MAX_WORKGROUP_INVOCATIONS
+layout (local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+layout (std430, binding = 0) buffer dot_buffer {
+    vec4 pos     [131072];
+    vec2 vel     [131072];
+    vec4 prevPos [131072];
+    float weights [131072];
+};
+layout (binding = 1) uniform sampler2D inTexture;
+
+uniform float time;
+uniform float deltaTime;
+shared float sharedWeights[1024];
+shared uint sharedIndices[1024];
+uint maxIdx;
+
+void swap(uint i, uint j) {
+    float tempWeight = weights[i];
+    vec4 tempPos = pos[i];
+    
+    weights[i] = weights[j];
+    pos[i] = pos[j];
+    
+    weights[j] = tempWeight;
+    pos[j] = tempPos;
+}
+
+void main() {
+    uint tidx = gl_LocalInvocationID.x;
+    uint idx = gl_GlobalInvocationID.x;
+    prevPos[idx] = pos[idx];
+
+    // Calculate weight function
+    vec4 vals = texture(inTexture,pos[idx].xy);
+    weights[idx] = vals.x * vals.x;
+    sharedWeights[tidx] = weights[idx];
+    sharedIndices[tidx] = idx;
+
+    uint num = 131072;
+    // Synchronize threads before reduction
+    barrier();
+
+    // Parallel reduction to find the maximum weight and its index
+    for (uint stride = 1; stride < gl_WorkGroupSize.x; stride *= 2) {
+        uint partner = tidx ^ stride;
+        if (partner > tidx && partner < gl_WorkGroupSize.x) {
+            // Compare and select the maximum weight and corresponding index
+            if (sharedWeights[tidx] < sharedWeights[partner]) {
+                sharedWeights[tidx] = sharedWeights[partner];
+                sharedIndices[tidx] = sharedIndices[partner];
+            }
+        }
+
+        // Synchronize threads before moving to the next stride
+        barrier();
+    }
+
+    // Store the index of the maximum weight for the entire workgroup in global memory
+    if (tidx == 0) {
+        uint maxIdx = sharedIndices[0];
+        weights[gl_WorkGroupID.x] = sharedWeights[0]; // Store local max weight in global memory
+        prevPos[gl_WorkGroupID.x] = pos[maxIdx];     // Store the position corresponding to the max weight
+    }
+
+    float n = idx * time;
+    float rand = fract(sin(n * 43758.5453123) * 43758.5453123) * 2;
+    float rand2 = fract(sin(n * 12.9898) * 43758.5453123);
+    int randInt = int(rand * rand2 * float(num));
+
+    pos[idx].x += int(abs(rand-2)) * rand2 * (pos[maxIdx].x - pos[idx].x) * deltaTime;
+    pos[idx].y += int(abs(rand-2)) * rand2 * (pos[maxIdx].y - pos[idx].y) * deltaTime;
+
+    pos[idx].x += int(rand) * rand2 * (pos[randInt].x - pos[idx].x) * 0.1 * deltaTime;
+    pos[idx].y += int(rand) * rand2 * (pos[randInt].y - pos[idx].y) * 0.1 * deltaTime;
+
+     
+    n = (idx + 1) * idx  * time * time;
+    rand = fract(sin(n * 43758.5453123) * 43758.5453123) * 2 - 1;
+    rand2 = fract(sin(n * 12.9898) * 43758.5453123) * 2 - 1;
+
+    pos[idx].x += 0.05 * rand * deltaTime;
+    pos[idx].y += 0.05 * rand2 * deltaTime;
+    pos[idx].xy = fract(pos[idx].xy) + -1 * int(pos[idx].xy);
+}
