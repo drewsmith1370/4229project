@@ -1,0 +1,11 @@
+## This is a cool project
+
+CSCI 4229
+Made by Ethan Coleman. Visualize chemical turing instabilites.
+
+## Description
+This was inspired by my research on patterning in fish skin. Non-linear chemical
+reactions lead to sinusoidal patterning (strips and spots), and microparticles will
+move along the gradients of these instabilities. In our case, microparticles represent
+pigment molecules. Here I take a two common patterns seen to arise from these instabilities
+and alternate between the patterns to make a fun visual showing the research.

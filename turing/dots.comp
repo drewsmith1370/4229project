@@ -1,0 +1,50 @@
+#version 430 core
+
+// Need to rewrite for GL_MAX_WORKGROUP_INVOCATIONS
+layout (local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+layout (std430, binding = 0) buffer dot_buffer {
+    vec4 pos     [131072];
+    vec2 vel     [131072];
+    vec4 prevPos [131072];
+};
+layout (binding = 1) uniform sampler2D inTexture;
+
+uniform float time;
+uniform float deltaTime;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    prevPos[idx] = pos[idx];
+
+    // Create movement properties
+    float mob00 = 0.1; 
+    float mob01 = -0.1;
+    float mob10 = -0.1;
+    float mob11 = 0.1;
+    float Pe=0.1, eta=0.3535533905932738, A_rd=4.5, alpha=1.01636712083014;
+
+    // Declare particle type
+    int types = int(idx % 2);
+    float mob0 = types * mob00 + abs(types-1) * mob10;
+    float mob1 = types * mob01 + abs(types-1) * mob11;
+    float D = abs(alpha*(mob0 - mob1*eta*(1+A_rd*eta)/A_rd)/Pe);
+    
+    // Calculate DP velocities
+    vec4 vals = texture(inTexture,pos[idx].xy);
+    float vdpx = mob0 * vals.x;
+    vdpx += mob1 * vals.z;
+    float vdpy = mob0 * vals.y;
+    vdpy += mob1 * vals.w;
+
+    float n = idx * time;
+    float randx = fract(sin(n * 43758.5453123) * 43758.5453123)*2 - 1;
+    float randy = fract(sin(n * 12.9898) * 43758.5453123)*2 - 1;
+
+    // Calculate brownian motion
+    float v_brx = randx*sqrt(D*deltaTime*2);
+    float v_bry = randy*sqrt(D*deltaTime*2);
+
+    pos[idx].x += (vdpx+v_brx)*deltaTime/3;
+    pos[idx].y += (vdpy+v_bry)*deltaTime/3;
+    pos[idx].xy = fract(pos[idx].xy) + -1 * int(pos[idx].xy);
+}
